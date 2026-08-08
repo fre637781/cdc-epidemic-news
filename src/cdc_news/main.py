@@ -5,6 +5,7 @@
     python -m cdc_news.main report   # 產生上一週的疫情週報
     python -m cdc_news.main run      # 抓取 + 週報
     python -m cdc_news.main verify   # 檢測所有來源網址與欄位設定（不呼叫 AI）
+    python -m cdc_news.main preview  # 產生監測數據段落＋趨勢圖到 reports/preview（不呼叫 AI）
     python -m cdc_news.main probe URL [URL...]   # 探測網頁/資料端點結構（開發診斷用）
 """
 
@@ -148,6 +149,21 @@ def verify(config: dict) -> None:
         print(line)
 
 
+def preview(config: dict) -> None:
+    """產生「監測數據」段落與趨勢圖到 reports/preview*，供調整格式用。"""
+    from .monitor import build_monitor_sections
+
+    reports_dir = Path(config.get("reports_dir", "reports"))
+    charts_dir = reports_dir / "assets" / "preview"
+    lines = ["# 監測數據段落預覽", ""]
+    lines += build_monitor_sections(config, charts_dir=charts_dir,
+                                    assets_prefix="assets/preview")
+    out = reports_dir / "preview.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines), encoding="utf-8")
+    print(f"預覽已產生：{out}（圖檔在 {charts_dir}/）")
+
+
 def load_config(path: str = "config.yaml") -> dict:
     config_path = Path(path)
     if not config_path.exists():
@@ -157,7 +173,8 @@ def load_config(path: str = "config.yaml") -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="CDC 疫情新聞回報與整理摘要")
-    parser.add_argument("command", choices=["fetch", "report", "run", "verify", "probe"])
+    parser.add_argument("command",
+                        choices=["fetch", "report", "run", "verify", "preview", "probe"])
     parser.add_argument("urls", nargs="*", help="probe 指令的目標網址")
     parser.add_argument("--config", default="config.yaml", help="設定檔路徑")
     args = parser.parse_args()
@@ -170,6 +187,10 @@ def main() -> None:
 
     if args.command == "verify":
         verify(config)
+        return
+
+    if args.command == "preview":
+        preview(config)
         return
 
     if args.command in ("fetch", "run"):

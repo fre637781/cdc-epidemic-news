@@ -60,7 +60,11 @@ def build_report(config: dict, day: date | None = None) -> Path | None:
     ]
 
     try:
-        monitor_lines = build_monitor_sections(config)
+        monitor_lines = build_monitor_sections(
+            config,
+            charts_dir=reports_dir / "assets" / week_label,
+            assets_prefix=f"assets/{week_label}",
+        )
     except Exception as exc:  # 監測數據失敗不影響新聞摘要
         monitor_lines = [f"（監測數據產生失敗：{type(exc).__name__}）", ""]
     lines += monitor_lines or ["（未設定監測資料來源）", ""]

@@ -17,10 +17,20 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from .nidss import Chart, fetch_page, find_chart, week_label
 
 SUMMARY_PATTERNS = ("上週累計", "今年累計數", "去年總數", "死亡")
 MAX_GROUPS = 10
+
+
+def _is_pct(name: str) -> bool:
+    return "%" in name
+
+
+def _is_threshold(name: str) -> bool:
+    return any(t in name for t in ("閾值", "預警"))
 
 
 def _fmt(value) -> str:
@@ -84,7 +94,33 @@ def _summary_line(summary_url: str) -> str | None:
     return f"  - 統計摘要：{'、'.join(picks)}" if picks else None
 
 
-def _render_item(item: dict, anchor: tuple[int, int] | None) -> list[str]:
+def _render_chart(item: dict, chart: Chart, chart_ctx: dict) -> str | None:
+    """畫趨勢圖，回傳 Markdown 圖片行；失敗或無可畫 series 時回傳 None。"""
+    keyword = item.get("series_keyword")
+    names = list(chart.series)
+    if keyword:
+        matched = [n for n in names if keyword in n]
+        names = matched or names
+    count_names = [n for n in names if not _is_pct(n) and not _is_threshold(n)]
+    threshold_names = [n for n in chart.series if _is_threshold(n)]
+    filename = chart_ctx["filename"]
+    try:
+        from .charts import render_trend
+        ok = render_trend(
+            chart, count_names, threshold_names,
+            title=f"{item.get('name', '')}（單位：{chart.suffix or '數'}）",
+            out_path=chart_ctx["dir"] / filename,
+            weeks_window=chart_ctx["weeks"],
+        )
+    except Exception:
+        return None
+    if not ok:
+        return None
+    return f"![{item.get('name', '')} 趨勢圖]({chart_ctx['prefix']}/{filename})"
+
+
+def _render_item(item: dict, anchor: tuple[int, int] | None,
+                 chart_ctx: dict | None = None) -> list[str]:
     name = item.get("name", "?")
     try:
         page = fetch_page(item["url"])
@@ -112,18 +148,22 @@ def _render_item(item: dict, anchor: tuple[int, int] | None) -> list[str]:
 
     # 陽性率（Positive (%)）與閾值/預警線不能混入加總，各自分離標註
     def split(values: dict) -> tuple[dict, dict, dict]:
-        pct = {k: v for k, v in values.items() if "%" in k}
+        pct = {k: v for k, v in values.items() if _is_pct(k)}
         thr = {k: v for k, v in values.items()
-               if k not in pct and any(t in k for t in ("閾值", "預警"))}
+               if k not in pct and _is_threshold(k)}
         counts = {k: v for k, v in values.items() if k not in pct and k not in thr}
         return counts, pct, thr
 
     counts, pct, thresholds = split(vals)
     prev_counts, _, _ = split(prev_vals)
 
+    lines: list[str] = []
+    image_line = _render_chart(item, chart, chart_ctx) if chart_ctx else None
+    if image_line:
+        lines += [image_line, ""]
+
     suffix = chart.suffix
     is_rate = suffix in ("%", "‰")
-    lines: list[str] = []
     groups = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
 
     if is_rate:
@@ -142,7 +182,8 @@ def _render_item(item: dict, anchor: tuple[int, int] | None) -> list[str]:
         for k, v in thresholds.items():
             head += f"（{k} {_fmt(v)}）"
         lines.append(head)
-        if len(groups) > 1:
+        # 有趨勢圖時分項組成由圖表呈現，不再列文字明細
+        if len(groups) > 1 and not image_line:
             shown = "、".join(f"{k} {_fmt(v)}" for k, v in groups[:MAX_GROUPS])
             more = f"⋯（另 {len(groups) - MAX_GROUPS} 類）" if len(groups) > MAX_GROUPS else ""
             lines.append(f"  - {shown}{more}")
@@ -151,17 +192,29 @@ def _render_item(item: dict, anchor: tuple[int, int] | None) -> list[str]:
         summary = _summary_line(item["summary_url"])
         if summary:
             lines.append(summary)
+    if image_line:
+        lines.append("")
     return lines
 
 
-def build_monitor_sections(config: dict) -> list[str]:
-    """產生「監測數據」整段 Markdown 行（各類別小節）。"""
+def build_monitor_sections(config: dict, charts_dir: Path | None = None,
+                           assets_prefix: str = "") -> list[str]:
+    """產生「監測數據」整段 Markdown 行（各類別小節）。
+
+    charts_dir 給定時，每個項目另產生趨勢圖 PNG 到該目錄，
+    Markdown 以 assets_prefix 為相對路徑引用圖檔。
+    """
     anchor = _anchor_week(config)
+    chart_weeks = int(config.get("chart_weeks", 26))
     lines: list[str] = []
-    for section in config.get("nidss_monitor", []):
+    for si, section in enumerate(config.get("nidss_monitor", []), 1):
         lines += [f"### {section.get('section', '')}", ""]
-        for item in section.get("items", []):
-            lines += _render_item(item, anchor)
+        for ii, item in enumerate(section.get("items", []), 1):
+            chart_ctx = None
+            if charts_dir is not None:
+                chart_ctx = {"dir": charts_dir, "prefix": assets_prefix,
+                             "weeks": chart_weeks, "filename": f"{si}-{ii}.png"}
+            lines += _render_item(item, anchor, chart_ctx)
         lines.append("")
     if lines and anchor:
         lines.append(

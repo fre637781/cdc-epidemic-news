@@ -1,16 +1,14 @@
-# 每週一產生上一週的疫情週報（AI 摘要 + 開放資料統計）
-name: Weekly report
+# 手動觸發：產生「監測數據」段落與趨勢圖預覽並 commit（不呼叫 Claude API）
+name: Preview monitor charts
 
 on:
-  schedule:
-    - cron: "30 0 * * 1"  # UTC 00:30 = 台北時間 08:30，每週一（避開每日抓取時段）
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  report:
+  preview:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,16 +27,15 @@ jobs:
         run: |
           if [ ! -f config.yaml ]; then cp config.example.yaml config.yaml; fi
 
-      - name: Fetch latest news and build weekly report
+      - name: Build preview
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           PYTHONPATH: src
-        run: python -m cdc_news.main run
+        run: python -m cdc_news.main preview
 
-      - name: Commit report
+      - name: Commit preview
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data reports
-          git diff --cached --quiet || git commit -m "chore: weekly CDC report $(date -u +%F)"
+          git add reports/preview.md reports/assets/preview
+          git diff --cached --quiet || git commit -m "chore: monitor charts preview"
           git push
