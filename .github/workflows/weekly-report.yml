@@ -12,6 +12,8 @@ permissions:
 jobs:
   report:
     runs-on: ubuntu-latest
+    env:
+      MAIL_ENABLED: ${{ secrets.MAIL_USERNAME != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -58,7 +60,7 @@ jobs:
           echo "week=$WEEK"  >> "$GITHUB_OUTPUT"
 
       - name: Send email
-        if: ${{ secrets.MAIL_USERNAME != '' }}
+        if: env.MAIL_ENABLED == 'true'
         uses: dawidd6/action-send-mail@v4
         with:
           server_address: smtp.gmail.com
