@@ -1,9 +1,11 @@
 """將 NIDSS 週趨勢資料畫成 PNG 圖表，嵌入週報 Markdown。
 
-三種畫法（kind）：
+四種畫法（kind）：
     line  折線趨勢圖（預設）
     bar   堆疊長條圖（各類檢出數的組成）
     share 100% 堆疊長條圖（各類占比，每週合計 100%）
+    years 年度同期比較（x 軸為第 1~52 週，每個年度一條線；
+          仿 NIDSS Diagram 頁的長期比較趨勢圖，今年加粗、往年淡化）
 
 設計依循固定的類別色盤（順序即身分，不循環產生新色）；
 超過 8 個 series 時，其餘合併為「其他」。陽性率（%）與計數
@@ -68,7 +70,11 @@ def _tick_positions(n: int, max_ticks: int = 7) -> list[int]:
 def _tick_labels(weeks: list[str], positions: list[int]) -> list[str]:
     labels, last_year = [], None
     for p in positions:
-        year, wk = weeks[p][:4], int(weeks[p][4:])
+        w = weeks[p]
+        if len(w) < 5:  # 年度比較圖的週序標籤（"01"~"52"）
+            labels.append(f"{int(w)}週" if w.isdigit() else w)
+            continue
+        year, wk = w[:4], int(w[4:])
         labels.append(f"{year}年{wk}週" if year != last_year else f"{wk}週")
         last_year = year
     return labels
@@ -83,36 +89,46 @@ def render_trend(chart: Chart, count_names: list[str], threshold_names: list[str
         return False
     _setup_fonts()
 
-    # NIDSS 的週分類常涵蓋整年（未來週為空值），先修剪頭尾整段無資料的週
-    n_weeks = len(chart.weeks)
-    full = {n: [(chart.series[n][j] if j < len(chart.series[n]) else None)
-                for j in range(n_weeks)] for n in count_names}
-    idxs = [j for j in range(n_weeks) if any(v[j] is not None for v in full.values())]
-    if not idxs:
-        return False
-    hi = idxs[-1]
-    start = max(idxs[0], hi - weeks_window + 1)
-    weeks = chart.weeks[start:hi + 1]
-    x = list(range(len(weeks)))
+    if kind == "years":
+        # 年度比較：series 名稱即年度，依年份排序（最後一個是今年）
+        weeks = chart.weeks
+        folded = [
+            (f"{name}年", [(chart.series[name][j] if j < len(chart.series[name]) else None)
+                           for j in range(len(weeks))])
+            for name in sorted(count_names)
+        ]
+        x = list(range(len(weeks)))
+    else:
+        # NIDSS 的週分類常涵蓋整年（未來週為空值），先修剪頭尾整段無資料的週
+        n_weeks = len(chart.weeks)
+        full = {n: [(chart.series[n][j] if j < len(chart.series[n]) else None)
+                    for j in range(n_weeks)] for n in count_names}
+        idxs = [j for j in range(n_weeks) if any(v[j] is not None for v in full.values())]
+        if not idxs:
+            return False
+        hi = idxs[-1]
+        start = max(idxs[0], hi - weeks_window + 1)
+        weeks = chart.weeks[start:hi + 1]
+        x = list(range(len(weeks)))
 
-    # 依窗格內總量排序決定畫線與配色順序；超出色盤的合併為「其他」
-    def total(name: str) -> float:
-        return sum(v for v in _window_values(chart, name, start, len(weeks))
-                   if v is not None)
+        # 依窗格內總量排序決定畫線與配色順序；超出色盤的合併為「其他」
+        def total(name: str) -> float:
+            return sum(v for v in _window_values(chart, name, start, len(weeks))
+                       if v is not None)
 
-    ordered = sorted(count_names, key=total, reverse=True)
-    folded: list[tuple[str, list]] = [
-        (name, _window_values(chart, name, start, len(weeks)))
-        for name in ordered[:MAX_SERIES if len(ordered) <= MAX_SERIES else MAX_SERIES - 1]
-    ]
-    if len(ordered) > MAX_SERIES:
-        rest = ordered[MAX_SERIES - 1:]
-        merged = []
-        for j in range(len(weeks)):
-            vals = [v for name in rest
-                    if (v := _window_values(chart, name, start, len(weeks))[j]) is not None]
-            merged.append(sum(vals) if vals else None)
-        folded.append((f"其餘 {len(rest)} 類合併", merged))
+        ordered = sorted(count_names, key=total, reverse=True)
+        folded = [
+            (name, _window_values(chart, name, start, len(weeks)))
+            for name in ordered[:MAX_SERIES if len(ordered) <= MAX_SERIES else MAX_SERIES - 1]
+        ]
+        if len(ordered) > MAX_SERIES:
+            rest = ordered[MAX_SERIES - 1:]
+            merged = []
+            for j in range(len(weeks)):
+                vals = [v for name in rest
+                        if (v := _window_values(chart, name, start, len(weeks))[j]) is not None]
+                merged.append(sum(vals) if vals else None)
+            folded.append((f"其餘 {len(rest)} 類合併", merged))
 
     if kind == "share":
         # 每週各類占比（%）；合計為 0 的週不畫
@@ -137,12 +153,18 @@ def render_trend(chart: Chart, count_names: list[str], threshold_names: list[str
     else:
         for i, (name, values) in enumerate(folded):
             color = PALETTE[i % len(PALETTE)]
+            latest_year = kind == "years" and i == len(folded) - 1
+            lw, alpha = (2.5, 1.0) if latest_year else \
+                ((1.6, 0.8) if kind == "years" else (2, 1.0))
             # 稀疏資料（中間有缺週）折線會斷裂，加上資料點標記讓孤點可見
             present = [j for j, v in enumerate(values) if v is not None]
             sparse = bool(present) and (present[-1] - present[0] + 1) > len(present)
-            ax.plot(x, values, lw=2, color=color, label=name, solid_capstyle="round",
+            ax.plot(x, values, lw=lw, alpha=alpha, color=color, label=name,
+                    solid_capstyle="round",
                     marker="o" if sparse else None, markersize=3.5)
-            if len(folded) <= 4 and present:  # 少量 series 時在線尾直接標值
+            # 線尾標值：一般折線在 series 少時全標；年度比較只標今年
+            annotate = present and (latest_year if kind == "years" else len(folded) <= 4)
+            if annotate:
                 j = present[-1]
                 ax.annotate(f"{values[j]:,.0f}", (x[j], values[j]),
                             xytext=(5, 0), textcoords="offset points",

@@ -94,9 +94,10 @@ nidss_monitor:
 
   - section: 登革熱
     items:
-      - name: 登革熱確定病例
-        url: "https://nidss.cdc.gov.tw/nndss/Disease?id=061"
-        series_keyword: 確定
+      # 仿 NIDSS Diagram 頁的長期比較趨勢圖：每個年度一條線、同週對照
+      - name: 登革熱確定病例（年度同期比較）
+        url: "https://nidss.cdc.gov.tw/nndss/Diagram?id=061"
+        chart_type: years
         summary_url: "https://nidss.cdc.gov.tw/nndss/Disease?id=061"
 
 # ── 週報「本週公告摘要」的疾病分組排序白名單 ────────────

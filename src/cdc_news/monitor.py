@@ -145,6 +145,55 @@ def _merged_chart(item: dict) -> Chart:
                  suffix=suffix, series=merged)
 
 
+def _render_years_item(item: dict, chart: Chart, anchor: tuple[int, int] | None,
+                       chart_ctx: dict | None) -> list[str]:
+    """年度同期比較圖（chart_type: years）：series 名稱是年度（2025、2026⋯）。
+
+    文字行呈現「今年上一完整週的數值＋去年同期」；跨年比較由圖表呈現。
+    """
+    name = item.get("name", "?")
+    years = sorted(n for n in chart.series if n.strip().isdigit())
+    if not years:
+        return [f"- **{name}**：⚠ 年度比較圖找不到年度序列（現有：{list(chart.series)[:6]}）"]
+    this_year = years[-1]
+    data = chart.series.get(this_year) or []
+
+    # 目標為上一完整週；該週無資料時退到今年最後有資料的一週
+    idx = None
+    if anchor and anchor[1] > 1:
+        wk = anchor[1] - 1
+        for fmt in (f"{wk:02d}", str(wk)):
+            if fmt in chart.weeks:
+                idx = chart.weeks.index(fmt)
+                break
+    if idx is None or idx >= len(data) or data[idx] is None:
+        idx = max((j for j, v in enumerate(data) if v is not None), default=None)
+    if idx is None:
+        return [f"- **{name}**：無可用資料"]
+
+    lines: list[str] = []
+    image_line = _render_chart(item, chart, chart_ctx) if chart_ctx else None
+    if image_line:
+        lines += [image_line, ""]
+
+    week_no = int(chart.weeks[idx]) if chart.weeks[idx].isdigit() else idx + 1
+    head = f"- **{name}**（{this_year}年第{week_no}週）：{_fmt(data[idx])}{chart.suffix}"
+    for prev in reversed(years[:-1]):  # 最近一個有同週資料的往年
+        pdata = chart.series.get(prev) or []
+        if idx < len(pdata) and pdata[idx] is not None:
+            head += f"，{prev}年同期 {_fmt(pdata[idx])}{chart.suffix}"
+            break
+    lines.append(head)
+
+    if item.get("summary_url"):
+        summary = _summary_line(item["summary_url"])
+        if summary:
+            lines.append(summary)
+    if image_line:
+        lines.append("")
+    return lines
+
+
 def _render_item(item: dict, anchor: tuple[int, int] | None,
                  chart_ctx: dict | None = None) -> list[str]:
     name = item.get("name", "?")
@@ -159,6 +208,9 @@ def _render_item(item: dict, anchor: tuple[int, int] | None,
                 return [f"- **{name}**：⚠ 找不到對應圖表；頁面現有圖表：{titles}"]
     except Exception as exc:
         return [f"- **{name}**：頁面抓取失敗（{type(exc).__name__}）"]
+
+    if item.get("chart_type") == "years":
+        return _render_years_item(item, chart, anchor, chart_ctx)
 
     if anchor:
         year, week = anchor
