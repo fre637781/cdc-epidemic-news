@@ -110,6 +110,11 @@ def probe(urls: list[str]) -> None:
                       f"週範圍 {c.weeks[0]}~{c.weeks[-1]}；series：{list(c.series)}")
         for err in errors:
             print("  ⚠", err)
+            m = re.search(r"char (\d+)", err)
+            if m:
+                pos_err = int(m.group(1))
+                ctx = text[max(0, pos_err - 200):pos_err + 200].replace("\n", "⏎")
+                print(f"    錯誤位置前後文：…{ctx}…")
         current = parse_current_week(text)
         if current:
             print(f"目前年週：{current[0]}年第{current[1]}週")
