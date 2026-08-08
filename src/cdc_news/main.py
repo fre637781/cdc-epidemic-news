@@ -91,6 +91,21 @@ def probe(urls: list[str]) -> None:
         if misc_links:
             print("misc 連結：", misc_links[:20])
 
+        # NIDSS 內嵌圖表清單
+        from .nidss import parse_charts
+        from .stats import _parse_html_table
+        charts = parse_charts(text)
+        if charts:
+            print(f"內嵌圖表數：{len(charts)}")
+            for c in charts:
+                print(f"  ▸ 標題「{c.title}」單位「{c.suffix}」"
+                      f"週範圍 {c.weeks[0]}~{c.weeks[-1]}；series：{list(c.series)}")
+        table_rows = _parse_html_table(text)
+        if table_rows and len(table_rows) <= 10:
+            print("表格內容：")
+            for r in table_rows:
+                print("  ", r)
+
 
 def verify(config: dict) -> None:
     """逐一檢測新聞來源與統計資料集，印出診斷資訊。"""
