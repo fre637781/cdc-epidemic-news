@@ -57,47 +57,29 @@ stats_datasets:
     count_field: 確定病例數
 
 # ── 實驗室監測資料來源（週報「實驗室監測」段落）────────
-# url 請填 NIDSS 圖表右上角「原始資料下載」按鈕的連結
-# （流感專區 nidss.cdc.gov.tw/Home/Index?op=2、新冠專區 op=6，
-#   在按鈕上按右鍵→複製連結，貼到下方後執行 verify 檢查欄位名）
-# group_field: 分組欄位（病原體/型別/病毒株等），週報會列出各分組明細
+# url 填 NIDSS 圖表「顯示文字表格」的網址（nidss.cdc.gov.tw/misc/... 這類），
+# 程式會解析頁面中的表格。
+# format: wide = 寬表格（一列一週、一欄一個病原體；第一欄為 202617 這類年週值），
+# NIDSS 的文字表格都是這種格式，各欄名稱即為分組名稱，不需另設欄位。
 lab_datasets:
   - name: 每周呼吸道病原體檢出
-    url: ""                     # ← 待填（op=2 頁面）
-    year_field: 年
-    week_field: 週
-    group_field: 病原體
-    count_field: 檢出數
+    url: ""                     # ← 待填（op=2 頁面對應圖表的文字表格網址）
+    format: wide
   - name: 流感病毒分子生物學檢出
     url: ""                     # ← 待填（op=2 頁面）
-    year_field: 年
-    week_field: 週
-    group_field: 型別
-    count_field: 檢出數
+    format: wide
   - name: LARS 重點呼吸道病原體陽性
-    url: ""                     # ← 待填（op=2 頁面）
-    year_field: 年
-    week_field: 週
-    group_field: 病原體
-    count_field: 陽性數
+    url: "https://nidss.cdc.gov.tw/misc/lars?id=uri"   # 待 verify 確認
+    format: wide
   - name: LARS 每周流感病原體陽性數
     url: ""                     # ← 待填（op=2 頁面）
-    year_field: 年
-    week_field: 週
-    group_field: 病原體
-    count_field: 陽性數
+    format: wide
   - name: 新冠病毒變異株本土病例檢出
     url: ""                     # ← 待填（op=6 頁面）
-    year_field: 年
-    week_field: 週
-    group_field: 變異株
-    count_field: 檢出數
+    format: wide
   - name: 新冠病毒變異株境外移入病例檢出
     url: ""                     # ← 待填（op=6 頁面）
-    year_field: 年
-    week_field: 週
-    group_field: 變異株
-    count_field: 檢出數
+    format: wide
 
 # ── 一般設定 ─────────────────────────────────────────
 max_items_per_run: 30      # 每次抓取最多處理幾則新聞

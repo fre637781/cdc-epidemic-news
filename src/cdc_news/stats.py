@@ -23,6 +23,7 @@ from collections.abc import Iterator
 from datetime import date, datetime, timedelta
 
 import requests
+from bs4 import BeautifulSoup
 
 USER_AGENT = "cdc-epidemic-news/0.1 (+https://github.com)"
 REQUEST_TIMEOUT = 60
@@ -55,8 +56,26 @@ def _parse_week(value: str) -> str | None:
     return None
 
 
+def _parse_html_table(text: str) -> list[dict]:
+    """解析頁面中的第一個 <table>，以表頭列為欄位名回傳 dict 列表。"""
+    soup = BeautifulSoup(text, "html.parser")
+    table = soup.find("table")
+    if table is None:
+        return []
+    trs = table.find_all("tr")
+    if not trs:
+        return []
+    headers = [c.get_text(strip=True) for c in trs[0].find_all(["th", "td"])]
+    rows: list[dict] = []
+    for tr in trs[1:]:
+        cells = [c.get_text(strip=True) for c in tr.find_all(["td", "th"])]
+        if len(cells) == len(headers):
+            rows.append(dict(zip(headers, cells)))
+    return rows
+
+
 def fetch_rows(url: str) -> list[dict]:
-    """下載並解析 CSV 或 JSON，回傳 dict 列表。"""
+    """下載並解析 CSV / JSON / HTML 表格（如 NIDSS 的文字表格頁），回傳 dict 列表。"""
     resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
     resp.raise_for_status()
     content_type = resp.headers.get("Content-Type", "")
@@ -64,6 +83,8 @@ def fetch_rows(url: str) -> list[dict]:
     if url.endswith(".json") or "json" in content_type:
         data = json.loads(text)
         return data if isinstance(data, list) else data.get("data", [])
+    if "html" in content_type or text.lstrip().startswith("<"):
+        return _parse_html_table(text)
     return list(csv.DictReader(io.StringIO(text)))
 
 
@@ -78,12 +99,36 @@ def _row_count(row: dict, count_field: str | None) -> int | None:
 
 
 def _iter_week_rows(rows: list[dict], entry: dict) -> Iterator[tuple[str, str, int]]:
-    """逐列產出 (ISO週, 分組, 數量)；無 group_field 時分組為空字串。"""
+    """逐列產出 (ISO週, 分組, 數量)；無 group_field 時分組為空字串。
+
+    format: wide 時為「一列一週、一欄一個分組」的寬表格
+    （如 NIDSS 文字表格：第一欄 202617 這類年週合併值，其餘欄為各病原體數字），
+    week_field 未設定時以第一欄為週欄位。
+    """
     count_field = entry.get("count_field")
     group_field = entry.get("group_field")
     year_field, week_field = entry.get("year_field"), entry.get("week_field")
     date_field = entry.get("date_field")
     mode = entry.get("mode", "line_list")
+
+    if entry.get("format") == "wide":
+        for row in rows:
+            keys = list(row.keys())
+            if not keys:
+                continue
+            wf = week_field if week_field in row else keys[0]
+            week = _parse_week(str(row.get(wf, "")))
+            if week is None:
+                continue
+            for col in keys:
+                if col == wf:
+                    continue
+                try:
+                    n = int(float(str(row[col]).replace(",", "").strip() or "x"))
+                except ValueError:
+                    continue
+                yield week, col, n
+        return
 
     for row in rows:
         group = str(row.get(group_field, "")).strip() if group_field else ""
