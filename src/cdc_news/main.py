@@ -38,25 +38,35 @@ def verify(config: dict) -> None:
             status = f"✗ 失敗：{type(exc).__name__}: {exc}"
         print(f"[{feed['name']}] {status}")
 
-    print()
-    print("=== 統計資料集 ===")
-    for entry in config.get("stats_datasets", []):
-        disease = entry.get("disease", "?")
+    def check_dataset(label: str, entry: dict) -> None:
+        if not entry.get("url"):
+            print(f"[{label}] ⚠ 尚未設定網址")
+            return
         try:
             rows = fetch_rows(entry["url"])
             if not rows:
-                print(f"[{disease}] ⚠ 下載成功但 0 列資料")
-                continue
+                print(f"[{label}] ⚠ 下載成功但 0 列資料")
+                return
             keys = list(rows[0].keys())
             counts = weekly_counts(rows, entry)
             recent = sorted(counts)[-3:]
-            print(f"[{disease}] 共 {len(rows)} 列；欄位：{keys}")
+            print(f"[{label}] 共 {len(rows)} 列；欄位：{keys}")
             if counts:
                 print(f"    近三週：{ {w: counts[w] for w in recent} }")
             else:
                 print("    ⚠ 欄位設定對不上資料（weekly_counts 為空），請比對上面的欄位名")
         except Exception as exc:
-            print(f"[{disease}] ✗ 失敗：{type(exc).__name__}: {exc}")
+            print(f"[{label}] ✗ 失敗：{type(exc).__name__}: {exc}")
+
+    print()
+    print("=== 統計資料集 ===")
+    for entry in config.get("stats_datasets", []):
+        check_dataset(entry.get("disease", "?"), entry)
+
+    print()
+    print("=== 實驗室監測資料集 ===")
+    for entry in config.get("lab_datasets", []):
+        check_dataset(entry.get("name", "?"), entry)
 
 
 def load_config(path: str = "config.yaml") -> dict:

@@ -9,7 +9,7 @@ from pathlib import Path
 import anthropic
 
 from .fetcher import NewsItem
-from .stats import build_stats_lines
+from .stats import build_lab_lines, build_stats_lines
 from .summarizer import summarize_item, write_overview
 
 
@@ -62,6 +62,12 @@ def build_report(config: dict, day: date | None = None) -> Path | None:
     stats_lines = build_stats_lines(config, day)
     lines += stats_lines or ["（未設定統計資料來源）"]
     lines.append("")
+
+    lab_lines = build_lab_lines(config, day)
+    if lab_lines:
+        lines += ["## 實驗室監測", ""]
+        lines += lab_lines
+        lines.append("")
 
     items = load_items_between(data_dir, week_start, week_end)
     if not items:
