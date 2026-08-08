@@ -1,9 +1,4 @@
 # 複製為 config.yaml 後修改
-#
-# ⚠️ 標註「需確認」的網址是佔位值：
-#   - RSS feed 網址請到 https://www.cdc.gov.tw/RSS 確認
-#   - 開放資料集網址請到 https://data.cdc.gov.tw/ 搜尋各資料集後，
-#     複製其 CSV/JSON 下載連結（通常在 od.cdc.gov.tw 網域）
 
 # ── 新聞來源（每日抓取）──────────────────────────────
 # type: rss（預設）或 html_list（網頁列表頁）
@@ -17,69 +12,76 @@ feeds:
     url: "https://www.cdc.gov.tw/TravelEpidemic/Index/RzNQU2F5L2RhZmRBd2pzWU5tM0NDQT09"
     type: html_list
 
-# ── 關注疾病（週報統計區與重點速覽的白名單）────────────
+# ── NIDSS 監測數據（週報「監測數據」段落，依類別分節）──
+# 資料直接解析 NIDSS 頁面內嵌圖表，不經 AI。
+# title_contains: 圖表標題關鍵字（空白分隔、須全部命中）
+# series_keyword: 只顯示名稱含此關鍵字的 series（過濾排除病例/閾值線）
+# summary_url:   疾病頁網址，附上「上週累計/今年累計/去年總數/死亡數」摘要
+nidss_monitor:
+  - section: 呼吸道病原體（整體）
+    items:
+      - name: 全國每週呼吸道病原體分子生物學檢出
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=2"
+        title_contains: 呼吸道病原體分子生物學
+      - name: LARS 每週重點呼吸道病原體陽性檢體
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=2"
+        title_contains: 重點呼吸道病原體陽性
+
+  - section: 新冠（COVID-19）
+    items:
+      - name: 新冠併發重症（本土＋境外移入）
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=6"
+        title_contains: 新冠併發重症
+        series_keyword: 確定
+        summary_url: "https://nidss.cdc.gov.tw/nndss/Disease?id=19SC"
+      - name: 每週新冠病毒變異株檢出——本土
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=6"
+        title_contains: 變異株檢出本土
+      - name: 每週新冠病毒變異株檢出——境外移入
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=6"
+        title_contains: 變異株檢出境外移入
+
+  - section: 流感
+    items:
+      - name: 流感併發重症（本土＋境外移入）
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=2"
+        title_contains: 流感併發重症
+        series_keyword: 確定
+        summary_url: "https://nidss.cdc.gov.tw/nndss/Disease?id=487a"
+      - name: 全國每週流感病毒分子生物學檢出
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=2"
+        title_contains: 流感病毒分子生物學
+      - name: LARS 每週流感病毒陽性檢體
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=2"
+        title_contains: 流感病毒陽性檢體
+
+  - section: 腸病毒
+    items:
+      - name: 腸病毒感染併發重症（本土＋境外移入）
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=1"
+        title_contains: 腸病毒感染併發重症
+        series_keyword: 確定
+        summary_url: "https://nidss.cdc.gov.tw/nndss/Disease?id=0749"
+      - name: 全國每週腸病毒分子生物學檢出
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=1"
+        title_contains: 腸病毒分子生物學
+      - name: 腸病毒健保門急診就診人次
+        url: "https://nidss.cdc.gov.tw/Home/Index?op=1"
+        title_contains: 腸病毒健保門急診就診人次
+
+  - section: 登革熱
+    items:
+      - name: 登革熱確定病例
+        url: "https://nidss.cdc.gov.tw/nndss/Disease?id=061"
+        series_keyword: 確定
+        summary_url: "https://nidss.cdc.gov.tw/nndss/Disease?id=061"
+
+# ── 週報「本週公告摘要」的疾病分組排序白名單 ────────────
 watch_diseases:
   - 登革熱
   - 流感
   - 腸病毒
   - COVID-19
-
-# ── 開放資料統計來源（週報產生時抓取）──────────────────
-# 疾病代碼取自 NIDSS 查詢頁（nidss.cdc.gov.tw/nndss/Disease?id=代碼）：
-#   061=登革熱, 487a=流感併發重症, 19SC=COVID-19, 0749=腸病毒感染併發重症
-# 資料集網址依疾管署開放資料常見命名推定，執行 `python -m cdc_news.main verify`
-# 可一次驗證所有網址與欄位名是否正確。
-#
-# 欄位配置（三選一）：
-#   year_field + week_field       每列帶年份與週別欄位（法定傳染病週報表常見格式）
-#   mode: line_list + date_field  每列一筆病例（完整日期）
-#   mode: weekly_count + date_field + count_field  每列已是週統計值
-stats_datasets:
-  - disease: 登革熱
-    url: "https://od.cdc.gov.tw/eic/Weekly_Age_County_Gender_061.json"   # 待 verify
-    year_field: 發病年份
-    week_field: 發病週別
-    count_field: 確定病例數
-  - disease: 流感（併發重症）
-    url: "https://od.cdc.gov.tw/eic/Weekly_Age_County_Gender_487a.json"  # 待 verify
-    year_field: 發病年份
-    week_field: 發病週別
-    count_field: 確定病例數
-  - disease: COVID-19
-    url: "https://od.cdc.gov.tw/eic/Weekly_Age_County_Gender_19SC.json"  # 待 verify
-    year_field: 發病年份
-    week_field: 發病週別
-    count_field: 確定病例數
-  - disease: 腸病毒（併發重症）
-    url: "https://od.cdc.gov.tw/eic/Weekly_Age_County_Gender_0749.json"  # 待 verify
-    year_field: 發病年份
-    week_field: 發病週別
-    count_field: 確定病例數
-
-# ── 實驗室監測資料來源（週報「實驗室監測」段落）────────
-# url 填 NIDSS 圖表「顯示文字表格」的網址（nidss.cdc.gov.tw/misc/... 這類），
-# 程式會解析頁面中的表格。
-# format: wide = 寬表格（一列一週、一欄一個病原體；第一欄為 202617 這類年週值），
-# NIDSS 的文字表格都是這種格式，各欄名稱即為分組名稱，不需另設欄位。
-lab_datasets:
-  - name: 每周呼吸道病原體檢出
-    url: ""                     # ← 待填（op=2 頁面對應圖表的文字表格網址）
-    format: wide
-  - name: 流感病毒分子生物學檢出
-    url: ""                     # ← 待填（op=2 頁面）
-    format: wide
-  - name: LARS 重點呼吸道病原體陽性
-    url: "https://nidss.cdc.gov.tw/misc/lars?id=uri"   # 待 verify 確認
-    format: wide
-  - name: LARS 每周流感病原體陽性數
-    url: ""                     # ← 待填（op=2 頁面）
-    format: wide
-  - name: 新冠病毒變異株本土病例檢出
-    url: ""                     # ← 待填（op=6 頁面）
-    format: wide
-  - name: 新冠病毒變異株境外移入病例檢出
-    url: ""                     # ← 待填（op=6 頁面）
-    format: wide
 
 # ── 一般設定 ─────────────────────────────────────────
 max_items_per_run: 30      # 每次抓取最多處理幾則新聞

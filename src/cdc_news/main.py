@@ -21,7 +21,6 @@ from bs4 import BeautifulSoup
 
 from .fetcher import USER_AGENT, fetch_all, fetch_feed, fetch_html_list
 from .report import build_report
-from .stats import fetch_rows, weekly_counts
 
 
 def probe(urls: list[str]) -> None:
@@ -101,20 +100,22 @@ def probe(urls: list[str]) -> None:
             print("--- Vlab 前後文 ---")
             print(re.sub(r"\s{2,}", " ", script_text[start:vidx + 900].replace("\n", " "))[:1300])
 
-        # NIDSS 內嵌圖表清單
-        from .nidss import parse_charts
-        from .stats import _parse_html_table
-        charts = parse_charts(text)
+        # NIDSS 內嵌圖表清單與摘要表
+        from .nidss import parse_charts, parse_current_week, parse_summary_table
+        charts, errors = parse_charts(text)
         if charts:
             print(f"內嵌圖表數：{len(charts)}")
             for c in charts:
                 print(f"  ▸ 標題「{c.title}」單位「{c.suffix}」"
                       f"週範圍 {c.weeks[0]}~{c.weeks[-1]}；series：{list(c.series)}")
-        table_rows = _parse_html_table(text)
-        if table_rows and len(table_rows) <= 10:
-            print("表格內容：")
-            for r in table_rows:
-                print("  ", r)
+        for err in errors:
+            print("  ⚠", err)
+        current = parse_current_week(text)
+        if current:
+            print(f"目前年週：{current[0]}年第{current[1]}週")
+        summary = parse_summary_table(text)
+        if summary:
+            print("摘要表：", summary)
 
 
 def verify(config: dict) -> None:
@@ -135,35 +136,11 @@ def verify(config: dict) -> None:
             status = f"✗ 失敗：{type(exc).__name__}: {exc}"
         print(f"[{feed['name']}] {status}")
 
-    def check_dataset(label: str, entry: dict) -> None:
-        if not entry.get("url"):
-            print(f"[{label}] ⚠ 尚未設定網址")
-            return
-        try:
-            rows = fetch_rows(entry["url"])
-            if not rows:
-                print(f"[{label}] ⚠ 下載成功但 0 列資料")
-                return
-            keys = list(rows[0].keys())
-            counts = weekly_counts(rows, entry)
-            recent = sorted(counts)[-3:]
-            print(f"[{label}] 共 {len(rows)} 列；欄位：{keys}")
-            if counts:
-                print(f"    近三週：{ {w: counts[w] for w in recent} }")
-            else:
-                print("    ⚠ 欄位設定對不上資料（weekly_counts 為空），請比對上面的欄位名")
-        except Exception as exc:
-            print(f"[{label}] ✗ 失敗：{type(exc).__name__}: {exc}")
-
     print()
-    print("=== 統計資料集 ===")
-    for entry in config.get("stats_datasets", []):
-        check_dataset(entry.get("disease", "?"), entry)
-
-    print()
-    print("=== 實驗室監測資料集 ===")
-    for entry in config.get("lab_datasets", []):
-        check_dataset(entry.get("name", "?"), entry)
+    print("=== NIDSS 監測數據（週報實際輸出預覽）===")
+    from .monitor import build_monitor_sections
+    for line in build_monitor_sections(config):
+        print(line)
 
 
 def load_config(path: str = "config.yaml") -> dict:

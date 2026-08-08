@@ -9,7 +9,7 @@ from pathlib import Path
 import anthropic
 
 from .fetcher import NewsItem
-from .stats import build_lab_lines, build_stats_lines
+from .monitor import build_monitor_sections
 from .summarizer import summarize_item, write_overview
 
 
@@ -55,19 +55,15 @@ def build_report(config: dict, day: date | None = None) -> Path | None:
         "",
         "> 本報告由 AI 自動產生，內容以疾管署原文為準。",
         "",
-        "## 本週疫情數據",
+        "## 監測數據",
         "",
     ]
 
-    stats_lines = build_stats_lines(config, day)
-    lines += stats_lines or ["（未設定統計資料來源）"]
-    lines.append("")
-
-    lab_lines = build_lab_lines(config, day)
-    if lab_lines:
-        lines += ["## 實驗室監測", ""]
-        lines += lab_lines
-        lines.append("")
+    try:
+        monitor_lines = build_monitor_sections(config)
+    except Exception as exc:  # 監測數據失敗不影響新聞摘要
+        monitor_lines = [f"（監測數據產生失敗：{type(exc).__name__}）", ""]
+    lines += monitor_lines or ["（未設定監測資料來源）", ""]
 
     items = load_items_between(data_dir, week_start, week_end)
     if not items:

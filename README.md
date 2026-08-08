@@ -9,9 +9,10 @@
 每週一 08:30 抓取病例統計（開放資料）+ AI 摘要一週新聞 → reports/週報.md
 ```
 
-- **新聞來源**：新聞稿及疫情訊息、國際旅遊疫情速訊、致醫界通函
-- **統計來源**：[疾管署開放資料平台](https://data.cdc.gov.tw/) 的病例／就診統計（純數字計算，不經 AI，無幻覺風險）
-- **關注疾病**：登革熱、流感、腸病毒、COVID-19（可在設定檔調整）
+- **新聞來源**：新聞稿及疫情訊息、致醫界通函（RSS）、國際旅遊疫情（網頁列表）
+- **監測數據**：直接解析 [NIDSS 傳染病統計系統](https://nidss.cdc.gov.tw/) 頁面內嵌的圖表資料
+  （純數字計算，不經 AI），依類別分節：呼吸道病原體、新冠（含變異株）、流感、腸病毒、登革熱，
+  涵蓋併發重症病例、分子生物學檢出、LARS 陽性檢體、變異株檢出等項目
 - **AI 摘要**：Claude API 對每則新聞產生結構化摘要（疾病、關注程度、地區、病例概況、防疫建議）
 
 ## 專案結構
@@ -26,7 +27,8 @@ cdc-epidemic-news/
 │   └── weekly-report.yml    # 每週一產生週報
 ├── src/cdc_news/
 │   ├── fetcher.py           # 抓取疾管署新聞（RSS / 網頁內文）
-│   ├── stats.py             # 抓取開放資料統計、計算週趨勢
+│   ├── nidss.py             # 解析 NIDSS 頁面內嵌圖表資料
+│   ├── monitor.py           # 產生週報「監測數據」段落
 │   ├── summarizer.py        # Claude API 摘要
 │   ├── report.py            # 產生疫情週報
 │   └── main.py              # CLI 進入點
@@ -51,15 +53,11 @@ cp config.example.yaml config.yaml
 export ANTHROPIC_API_KEY="你的 API key"
 ```
 
-新聞來源的網址已填入實際值。`config.example.yaml` 中仍標註**「需確認」**的是統計資料集：
+所有來源網址均已設定完成。執行 `python -m cdc_news.main verify`（或手動觸發
+「Verify sources」workflow）可檢測全部新聞來源與 NIDSS 監測項目並預覽週報數據段落。
 
-| 項目 | 狀態 |
-|---|---|
-| RSS feed 網址（新聞稿等 2 個 feed） | ✅ 已設定 |
-| 國際旅遊疫情速訊（網頁列表抓取） | ✅ 已設定 |
-| 開放資料集網址（各疾病統計） | ⚠️ 待確認 — 到 [開放資料平台](https://data.cdc.gov.tw/) 搜尋資料集，複製 CSV/JSON 下載連結 |
-
-統計資料集同時要確認欄位名稱（`date_field`／`count_field`）與格式（`mode`），說明見設定檔註解。
+> 註：疾管署開放資料平台（od.cdc.gov.tw）會擋 GitHub Actions 的國外 IP，
+> 因此監測數據改由 NIDSS 頁面解析取得（GitHub Actions 可正常連線）。
 
 ### 3. 執行
 
