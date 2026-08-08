@@ -48,6 +48,16 @@ def probe(urls: list[str]) -> None:
         soup = BeautifulSoup(text, "html.parser")
         if soup.title:
             print("頁面標題：", soup.title.get_text(strip=True))
+        # 表單欄位（找出篩選參數名稱，如本土/境外）
+        for f in soup.find_all("form")[:5]:
+            print(f"表單 action={f.get('action')} method={f.get('method')}")
+        for sel in soup.find_all("select")[:12]:
+            opts = [(o.get("value"), o.get_text(strip=True)) for o in sel.find_all("option")[:12]]
+            print(f"  select name={sel.get('name')} id={sel.get('id')} options={opts}")
+        hidden = [(i.get("name"), i.get("value")) for i in soup.find_all("input")
+                  if i.get("type") in ("hidden", "radio", "checkbox")][:20]
+        if hidden:
+            print("  inputs：", hidden)
         iframes = [i.get("src") for i in soup.find_all("iframe")]
         if iframes:
             print("iframes：", iframes[:20])

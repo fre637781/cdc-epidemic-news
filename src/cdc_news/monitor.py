@@ -104,13 +104,16 @@ def _render_chart(item: dict, chart: Chart, chart_ctx: dict) -> str | None:
     count_names = [n for n in names if not _is_pct(n) and not _is_threshold(n)]
     threshold_names = [n for n in chart.series if _is_threshold(n)]
     filename = chart_ctx["filename"]
+    kind = item.get("chart_type", "line")
+    unit = "各類占比" if kind == "share" else f"單位：{chart.suffix or '數'}"
     try:
         from .charts import render_trend
         ok = render_trend(
             chart, count_names, threshold_names,
-            title=f"{item.get('name', '')}（單位：{chart.suffix or '數'}）",
+            title=f"{item.get('name', '')}（{unit}）",
             out_path=chart_ctx["dir"] / filename,
             weeks_window=chart_ctx["weeks"],
+            kind=kind,
         )
     except Exception:
         return None

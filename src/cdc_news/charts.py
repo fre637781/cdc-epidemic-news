@@ -1,4 +1,9 @@
-"""將 NIDSS 週趨勢資料畫成 PNG 折線圖，嵌入週報 Markdown。
+"""將 NIDSS 週趨勢資料畫成 PNG 圖表，嵌入週報 Markdown。
+
+三種畫法（kind）：
+    line  折線趨勢圖（預設）
+    bar   堆疊長條圖（各類檢出數的組成）
+    share 100% 堆疊長條圖（各類占比，每週合計 100%）
 
 設計依循固定的類別色盤（順序即身分，不循環產生新色）；
 超過 8 個 series 時，其餘合併為「其他」。陽性率（%）與計數
@@ -70,7 +75,8 @@ def _tick_labels(weeks: list[str], positions: list[int]) -> list[str]:
 
 
 def render_trend(chart: Chart, count_names: list[str], threshold_names: list[str],
-                 title: str, out_path: Path, weeks_window: int = DEFAULT_WEEKS) -> bool:
+                 title: str, out_path: Path, weeks_window: int = DEFAULT_WEEKS,
+                 kind: str = "line") -> bool:
     """畫一張趨勢圖；沒有可畫的計數 series 時回傳 False。"""
     count_names = [n for n in count_names if n in chart.series]
     if not count_names:
@@ -108,22 +114,39 @@ def render_trend(chart: Chart, count_names: list[str], threshold_names: list[str
             merged.append(sum(vals) if vals else None)
         folded.append((f"其餘 {len(rest)} 類合併", merged))
 
+    if kind == "share":
+        # 每週各類占比（%）；合計為 0 的週不畫
+        totals = [sum(v[j] for _, v in folded if v[j] is not None) or None
+                  for j in range(len(weeks))]
+        folded = [(name, [v[j] / totals[j] * 100
+                          if v[j] is not None and totals[j] else None
+                          for j in range(len(weeks))])
+                  for name, v in folded]
+
     fig, ax = plt.subplots(figsize=(8, 3.2), dpi=150)
     fig.patch.set_facecolor(SURFACE)
     ax.set_facecolor(SURFACE)
 
-    for i, (name, values) in enumerate(folded):
-        color = PALETTE[i % len(PALETTE)]
-        # 稀疏資料（中間有缺週）折線會斷裂，加上資料點標記讓孤點可見
-        present = [j for j, v in enumerate(values) if v is not None]
-        sparse = bool(present) and (present[-1] - present[0] + 1) > len(present)
-        ax.plot(x, values, lw=2, color=color, label=name, solid_capstyle="round",
-                marker="o" if sparse else None, markersize=3.5)
-        if len(folded) <= 4 and present:  # 少量 series 時在線尾直接標值
-            j = present[-1]
-            ax.annotate(f"{values[j]:,.0f}", (x[j], values[j]),
-                        xytext=(5, 0), textcoords="offset points",
-                        fontsize=8, color=color, va="center")
+    if kind in ("bar", "share"):
+        bottom = [0.0] * len(weeks)
+        for i, (name, values) in enumerate(folded):
+            heights = [v if v is not None else 0.0 for v in values]
+            ax.bar(x, heights, bottom=bottom, width=0.82,
+                   color=PALETTE[i % len(PALETTE)], label=name, linewidth=0)
+            bottom = [b + h for b, h in zip(bottom, heights)]
+    else:
+        for i, (name, values) in enumerate(folded):
+            color = PALETTE[i % len(PALETTE)]
+            # 稀疏資料（中間有缺週）折線會斷裂，加上資料點標記讓孤點可見
+            present = [j for j, v in enumerate(values) if v is not None]
+            sparse = bool(present) and (present[-1] - present[0] + 1) > len(present)
+            ax.plot(x, values, lw=2, color=color, label=name, solid_capstyle="round",
+                    marker="o" if sparse else None, markersize=3.5)
+            if len(folded) <= 4 and present:  # 少量 series 時在線尾直接標值
+                j = present[-1]
+                ax.annotate(f"{values[j]:,.0f}", (x[j], values[j]),
+                            xytext=(5, 0), textcoords="offset points",
+                            fontsize=8, color=color, va="center")
 
     dashes = ["--", (0, (1, 1.5)), (0, (4, 1.5, 1, 1.5))]
     for i, name in enumerate(threshold_names):
@@ -133,6 +156,10 @@ def render_trend(chart: Chart, count_names: list[str], threshold_names: list[str
 
     ax.set_title(title, loc="left", fontsize=11, color=INK, pad=10)
     ax.set_ylim(bottom=0)
+    if kind == "share":
+        ax.set_ylim(0, 100)
+        ax.set_yticks([0, 25, 50, 75, 100])
+        ax.set_yticklabels(["0%", "25%", "50%", "75%", "100%"])
     ax.margins(x=0.01)
 
     positions = _tick_positions(len(weeks))
