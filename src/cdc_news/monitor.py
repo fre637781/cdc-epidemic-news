@@ -108,24 +108,39 @@ def _render_item(item: dict, anchor: tuple[int, int] | None) -> list[str]:
         return [f"- **{name}**：無可用資料"]
     keyword = item.get("series_keyword")
     vals = _filter(vals, keyword)
-    prev_vals = _filter(prev_vals, keyword)
+    prev_vals = _filter(prev_vals, keyword) or {}
+
+    # 陽性率（Positive (%)）與閾值/預警線不能混入加總，各自分離標註
+    def split(values: dict) -> tuple[dict, dict, dict]:
+        pct = {k: v for k, v in values.items() if "%" in k}
+        thr = {k: v for k, v in values.items()
+               if k not in pct and any(t in k for t in ("閾值", "預警"))}
+        counts = {k: v for k, v in values.items() if k not in pct and k not in thr}
+        return counts, pct, thr
+
+    counts, pct, thresholds = split(vals)
+    prev_counts, _, _ = split(prev_vals)
 
     suffix = chart.suffix
     is_rate = suffix in ("%", "‰")
     lines: list[str] = []
-    groups = sorted(vals.items(), key=lambda kv: kv[1], reverse=True)
+    groups = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
 
     if is_rate:
         body = "、".join(f"{k} {_fmt(v)}{suffix}" for k, v in groups[:MAX_GROUPS])
         lines.append(f"- **{name}**（{_pretty(label)}）：{body}")
     else:
-        total = sum(vals.values())
+        total = sum(counts.values())
         head = f"- **{name}**（{_pretty(label)}）：共 {_fmt(total)}{suffix}"
-        prev_total = sum(prev_vals.values()) if prev_vals else 0
+        prev_total = sum(prev_counts.values())
         if prev_total:
             diff = total - prev_total
             arrow = "↑" if diff > 0 else ("↓" if diff < 0 else "→")
             head += f"，較前一週 {arrow} {diff:+,.0f}（{diff / prev_total * 100:+.0f}%）"
+        for k, v in pct.items():
+            head += f"；陽性率 {_fmt(v)}%"
+        for k, v in thresholds.items():
+            head += f"（{k} {_fmt(v)}）"
         lines.append(head)
         if len(groups) > 1:
             shown = "、".join(f"{k} {_fmt(v)}" for k, v in groups[:MAX_GROUPS])
