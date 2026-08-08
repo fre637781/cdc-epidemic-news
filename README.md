@@ -76,7 +76,8 @@ python -m cdc_news.main run      # 抓取 + 週報
 1. 在 repo 的 **Settings → Secrets and variables → Actions** 新增 `ANTHROPIC_API_KEY`
 2. （選用）Email 寄送週報：再新增 `MAIL_USERNAME`（Gmail 地址）與
    `MAIL_PASSWORD`（Gmail 應用程式密碼，於 https://myaccount.google.com/apppasswords 產生，
-   需先開啟兩步驟驗證）；收件人預設同 `MAIL_USERNAME`，可另設 `MAIL_TO` 指定。
+   需先開啟兩步驟驗證）；收件人預設同 `MAIL_USERNAME`，可另設 `MAIL_TO` 指定，
+   多位收件人以逗號分隔（如 `a@gmail.com, b@example.com`）。
    未設定這組 secrets 時會自動略過寄信，其餘功能不受影響。
 3. 確認 `config.yaml` 已提交，或維持用 `config.example.yaml` 的預設值（workflow 會自動複製）
 4. 各 workflow 都可在 Actions 頁面手動觸發（workflow_dispatch）測試

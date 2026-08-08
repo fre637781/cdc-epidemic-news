@@ -6,7 +6,8 @@
 環境變數：
     MAIL_USERNAME  Gmail 地址（寄件帳號）
     MAIL_PASSWORD  Gmail 應用程式密碼
-    MAIL_TO        收件人（省略時寄給 MAIL_USERNAME）
+    MAIL_TO        收件人（省略時寄給 MAIL_USERNAME；多人以逗號分隔）
+    MAIL_IMG_WIDTH 信中圖片顯示寬度 px（預設 600）
     GITHUB_REPOSITORY  owner/repo（附上 GitHub 完整版連結用，可省略）
 """
 
@@ -47,8 +48,10 @@ def build_message(report_path: Path) -> EmailMessage:
             return m.group(0)
         cid = make_msgid()  # 形如 <...@host>
         images.append((path, cid))
-        return (f'<img src="cid:{cid[1:-1]}" alt="{alt}" '
-                f'style="max-width:100%;height:auto;display:block;margin:8px 0">')
+        width = os.environ.get("MAIL_IMG_WIDTH", "600")
+        return (f'<img src="cid:{cid[1:-1]}" alt="{alt}" width="{width}" '
+                f'style="width:{width}px;max-width:100%;height:auto;'
+                f'display:block;margin:8px 0">')
 
     text = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", replace_image, text)
     body = markdown.markdown(text, extensions=["tables", "sane_lists"])
