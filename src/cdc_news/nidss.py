@@ -80,6 +80,8 @@ def fetch_page(url: str) -> Page:
 
 def parse_charts(text: str) -> tuple[list[Chart], list[str]]:
     """解析所有 hcJson.push({...})；JSON 解析失敗時退回正則擷取。"""
+    # NIDSS 的 Vlab 圖表資料陣列含 JS 的 undefined（非合法 JSON），換成 null
+    text = re.sub(r"(?<=[\[,])\s*undefined\s*(?=[,\]])", "null", text)
     decoder = json.JSONDecoder()
     charts: list[Chart] = []
     errors: list[str] = []
