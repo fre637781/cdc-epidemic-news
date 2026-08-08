@@ -1,0 +1,27 @@
+# 手動觸發：檢測所有來源網址與欄位設定（不呼叫 Claude API）
+name: Verify sources
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Prepare config
+        run: |
+          if [ ! -f config.yaml ]; then cp config.example.yaml config.yaml; fi
+
+      - name: Verify feeds and datasets
+        env:
+          PYTHONPATH: src
+        run: python -m cdc_news.main verify

@@ -1,8 +1,10 @@
 """從疾管署開放資料平台抓取病例統計，計算每週數字與趨勢。
 
-資料來源設定於 config 的 stats_datasets，支援兩種格式：
-- line_list:    每列一筆病例（如 Dengue_Daily.csv），依 date_field 計數
-- weekly_count: 每列已是週統計（date_field 取週、count_field 加總）
+資料來源設定於 config 的 stats_datasets，支援三種欄位配置：
+- year_field + week_field: 每列帶「年份」與「週別」欄位（疾管署法定傳染病
+  週報表的常見格式），count_field 加總（未設定時每列計 1）
+- mode: line_list          每列一筆病例，依 date_field（完整日期）計數
+- mode: weekly_count       date_field 為週字串、count_field 加總
 
 任何一個資料集抓取失敗都只會略過該疾病，不影響報告產生。
 """
@@ -60,12 +62,39 @@ def fetch_rows(url: str) -> list[dict]:
     return list(csv.DictReader(io.StringIO(text)))
 
 
+def _row_count(row: dict, count_field: str | None) -> int | None:
+    """讀取一列的數量值；未設定 count_field 時每列計 1。"""
+    if not count_field:
+        return 1
+    try:
+        return int(float(str(row.get(count_field, "0")).replace(",", "")))
+    except ValueError:
+        return None
+
+
 def weekly_counts(rows: list[dict], entry: dict) -> dict[str, int]:
     """依資料集設定彙整出 {ISO週: 數量}。"""
     counts: dict[str, int] = {}
+    count_field = entry.get("count_field")
+
+    # 年+週欄位格式（優先於 mode 判斷）
+    year_field, week_field = entry.get("year_field"), entry.get("week_field")
+    if year_field and week_field:
+        for row in rows:
+            try:
+                year = int(str(row.get(year_field, "")).strip())
+                week = int(str(row.get(week_field, "")).strip())
+            except ValueError:
+                continue
+            n = _row_count(row, count_field)
+            if n is None:
+                continue
+            label = f"{year}-W{week:02d}"
+            counts[label] = counts.get(label, 0) + n
+        return counts
+
     date_field = entry["date_field"]
     mode = entry.get("mode", "line_list")
-    count_field = entry.get("count_field")
 
     for row in rows:
         raw = str(row.get(date_field, "")).strip()
@@ -81,9 +110,8 @@ def weekly_counts(rows: list[dict], entry: dict) -> dict[str, int]:
             week = _parse_week(raw) or (_iso_week(_parse_date(raw)) if _parse_date(raw) else None)
             if week is None:
                 continue
-            try:
-                n = int(float(str(row.get(count_field, "0")).replace(",", "")))
-            except ValueError:
+            n = _row_count(row, count_field)
+            if n is None:
                 continue
             counts[week] = counts.get(week, 0) + n
     return counts

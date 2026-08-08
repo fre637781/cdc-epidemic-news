@@ -25,30 +25,36 @@ watch_diseases:
   - COVID-19
 
 # ── 開放資料統計來源（週報產生時抓取）──────────────────
-# mode:
-#   line_list    每列一筆病例（用 date_field 依週計數），如登革熱每日確定病例
-#   weekly_count 每列已是統計值（date_field 取週、count_field 取數值加總）
+# 疾病代碼取自 NIDSS 查詢頁（nidss.cdc.gov.tw/nndss/Disease?id=代碼）：
+#   061=登革熱, 487a=流感併發重症, 19SC=COVID-19, 0749=腸病毒感染併發重症
+# 資料集網址依疾管署開放資料常見命名推定，執行 `python -m cdc_news.main verify`
+# 可一次驗證所有網址與欄位名是否正確。
+#
+# 欄位配置（三選一）：
+#   year_field + week_field       每列帶年份與週別欄位（法定傳染病週報表常見格式）
+#   mode: line_list + date_field  每列一筆病例（完整日期）
+#   mode: weekly_count + date_field + count_field  每列已是週統計值
 stats_datasets:
   - disease: 登革熱
-    url: "https://od.cdc.gov.tw/eic/Dengue_Daily.csv"           # 需確認
-    mode: line_list
-    date_field: 發病日
-  - disease: 流感
-    url: "https://od.cdc.gov.tw/eic/NHI_Influenza_like_illness.csv"  # 需確認（健保類流感就診）
-    mode: weekly_count
-    date_field: 就診週
-    count_field: 就診人次
-  - disease: 腸病毒
-    url: "https://od.cdc.gov.tw/eic/NHI_EnteroviralInfection.csv"    # 需確認（健保腸病毒就診）
-    mode: weekly_count
-    date_field: 就診週
-    count_field: 就診人次
-  # COVID-19 資料集格式變動較頻繁，請至 data.cdc.gov.tw 確認後補上
-  # - disease: COVID-19
-  #   url: ""
-  #   mode: weekly_count
-  #   date_field: ""
-  #   count_field: ""
+    url: "https://od.cdc.gov.tw/eic/Weekly_Age_County_Gender_061.json"   # 待 verify
+    year_field: 發病年份
+    week_field: 發病週別
+    count_field: 確定病例數
+  - disease: 流感（併發重症）
+    url: "https://od.cdc.gov.tw/eic/Weekly_Age_County_Gender_487a.json"  # 待 verify
+    year_field: 發病年份
+    week_field: 發病週別
+    count_field: 確定病例數
+  - disease: COVID-19
+    url: "https://od.cdc.gov.tw/eic/Weekly_Age_County_Gender_19SC.json"  # 待 verify
+    year_field: 發病年份
+    week_field: 發病週別
+    count_field: 確定病例數
+  - disease: 腸病毒（併發重症）
+    url: "https://od.cdc.gov.tw/eic/Weekly_Age_County_Gender_0749.json"  # 待 verify
+    year_field: 發病年份
+    week_field: 發病週別
+    count_field: 確定病例數
 
 # ── 一般設定 ─────────────────────────────────────────
 max_items_per_run: 30      # 每次抓取最多處理幾則新聞
