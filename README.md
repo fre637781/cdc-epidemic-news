@@ -51,12 +51,13 @@ cp config.example.yaml config.yaml
 export ANTHROPIC_API_KEY="你的 API key"
 ```
 
-`config.example.yaml` 中標註**「需確認」**的網址是佔位值，使用前必須替換：
+新聞來源的網址已填入實際值。`config.example.yaml` 中仍標註**「需確認」**的是統計資料集：
 
-| 項目 | 到哪裡確認 |
+| 項目 | 狀態 |
 |---|---|
-| RSS feed 網址（3 個新聞來源） | [疾管署 RSS 訂閱頁](https://www.cdc.gov.tw/RSS) |
-| 開放資料集網址（各疾病統計） | [疾管署開放資料平台](https://data.cdc.gov.tw/) 搜尋資料集，複製 CSV/JSON 下載連結 |
+| RSS feed 網址（新聞稿等 2 個 feed） | ✅ 已設定 |
+| 國際旅遊疫情速訊（網頁列表抓取） | ✅ 已設定 |
+| 開放資料集網址（各疾病統計） | ⚠️ 待確認 — 到 [開放資料平台](https://data.cdc.gov.tw/) 搜尋資料集，複製 CSV/JSON 下載連結 |
 
 統計資料集同時要確認欄位名稱（`date_field`／`count_field`）與格式（`mode`），說明見設定檔註解。
 

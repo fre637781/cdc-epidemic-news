@@ -1,7 +1,12 @@
 """抓取疾管署疫情新聞。
 
-從設定檔指定的 RSS feed 抓取新聞項目，並補抓內文，
+從設定檔指定的來源抓取新聞項目並補抓內文，
 以 JSON 格式存入 data/YYYY-MM-DD/ 目錄。
+
+來源類型（feed 設定的 type 欄位）：
+- rss（預設）   標準 RSS/Atom feed；來源名稱自動採用 feed 自帶標題
+- html_list     網頁列表頁（如「國際旅遊疫情速訊」訂閱頁），
+                抓取頁面上連到 /Detail/ 的項目連結
 """
 
 from __future__ import annotations
@@ -12,6 +17,7 @@ import re
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
+from urllib.parse import urljoin
 
 import feedparser
 import requests
@@ -36,8 +42,14 @@ class NewsItem:
 
 
 def fetch_feed(name: str, url: str) -> list[NewsItem]:
-    """抓取單一 RSS feed，回傳新聞項目清單。"""
+    """抓取單一 RSS feed，回傳新聞項目清單。
+
+    來源名稱優先採用 feed 自帶的標題（避免設定檔標錯），
+    feed 沒有標題時才用設定檔的 name。
+    """
     parsed = feedparser.parse(url, agent=USER_AGENT)
+    feed_title = (parsed.feed.get("title") or "").strip()
+    name = feed_title or name
     items: list[NewsItem] = []
     for entry in parsed.entries:
         link = entry.get("link", "")
@@ -57,6 +69,40 @@ def fetch_feed(name: str, url: str) -> list[NewsItem]:
             )
         )
     return items
+
+
+def fetch_html_list(name: str, url: str) -> list[NewsItem]:
+    """抓取網頁列表頁（非 RSS 來源），擷取項目連結。
+
+    以「連結網址含 /Detail/」作為項目判斷條件——疾管署的公告、
+    新聞與速訊詳細頁網址普遍符合此模式。發布日期無法從列表頁
+    可靠取得，留空（週報以「抓取日期」歸檔，不受影響）。
+    """
+    try:
+        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+    except requests.RequestException:
+        return []
+    soup = BeautifulSoup(resp.text, "html.parser")
+    items: list[NewsItem] = []
+    seen_links: set[str] = set()
+    for a in soup.find_all("a", href=True):
+        href = urljoin(url, a["href"])
+        title = a.get_text(" ", strip=True)
+        if "/Detail/" not in href or not title or href in seen_links:
+            continue
+        seen_links.add(href)
+        items.append(
+            NewsItem(
+                id=NewsItem.make_id(href),
+                source=name,
+                title=title,
+                link=href,
+                published="",
+                body="",
+            )
+        )
+    return items[:30]
 
 
 def fetch_article_body(url: str) -> str:
@@ -110,7 +156,11 @@ def fetch_all(config: dict) -> list[NewsItem]:
 
     new_items: list[NewsItem] = []
     for feed in config.get("feeds", []):
-        for item in fetch_feed(feed["name"], feed["url"]):
+        if feed.get("type") == "html_list":
+            fetched = fetch_html_list(feed["name"], feed["url"])
+        else:
+            fetched = fetch_feed(feed["name"], feed["url"])
+        for item in fetched:
             if item.id in seen or len(new_items) >= max_items:
                 continue
             item.body = fetch_article_body(item.link)
