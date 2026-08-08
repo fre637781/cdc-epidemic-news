@@ -2,8 +2,8 @@
 
 用法：
     python -m cdc_news.main fetch    # 抓取最新新聞
-    python -m cdc_news.main report   # 產生今日摘要報告
-    python -m cdc_news.main run      # 抓取 + 報告
+    python -m cdc_news.main report   # 產生上一週的疫情週報
+    python -m cdc_news.main run      # 抓取 + 週報
 """
 
 from __future__ import annotations

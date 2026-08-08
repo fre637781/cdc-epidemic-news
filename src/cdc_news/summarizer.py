@@ -54,7 +54,7 @@ def summarize_item(client: anthropic.Anthropic, item: NewsItem, config: dict) ->
 def write_overview(client: anthropic.Anthropic, summaries: list[dict], config: dict) -> str:
     """由各則摘要彙整出「重點速覽」段落（Markdown 條列）。"""
     if not summaries:
-        return "今日無新增疫情新聞。"
+        return "本週無新增疫情新聞。"
     bullet_input = "\n".join(
         f"- [{s['disease']}/{s['severity']}/{s['region']}] {s['case_summary']} {s['summary']}"
         for s in summaries
@@ -65,7 +65,7 @@ def write_overview(client: anthropic.Anthropic, summaries: list[dict], config: d
         system=SYSTEM_PROMPT,
         messages=[{
             "role": "user",
-            "content": "以下是今日各則疾管署新聞的摘要，請彙整成 3-6 點的「重點速覽」"
+            "content": "以下是本週各則疾管署新聞的摘要，請彙整成 3-6 點的「重點速覽」"
                        "Markdown 條列，關注程度高的排前面，同一疾病合併成一點：\n\n" + bullet_input,
         }],
     )

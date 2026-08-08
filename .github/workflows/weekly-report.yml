@@ -1,9 +1,9 @@
-# 每日自動抓取疾管署新聞並產生摘要報告
-name: Daily CDC report
+# 每週一產生上一週的疫情週報（AI 摘要 + 開放資料統計）
+name: Weekly report
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # UTC 00:00 = 台北時間 08:00
+    - cron: "30 0 * * 1"  # UTC 00:30 = 台北時間 08:30，每週一（避開每日抓取時段）
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
         run: |
           if [ ! -f config.yaml ]; then cp config.example.yaml config.yaml; fi
 
-      - name: Fetch news and build report
+      - name: Fetch latest news and build weekly report
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           PYTHONPATH: src
@@ -37,5 +37,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data reports
-          git diff --cached --quiet || git commit -m "chore: daily CDC report $(date -u +%F)"
+          git diff --cached --quiet || git commit -m "chore: weekly CDC report $(date -u +%F)"
           git push

@@ -1,15 +1,54 @@
 # 複製為 config.yaml 後修改
-# 疾管署 RSS feed 清單：請到 https://www.cdc.gov.tw/RSS 確認實際網址
+#
+# ⚠️ 標註「需確認」的網址是佔位值：
+#   - RSS feed 網址請到 https://www.cdc.gov.tw/RSS 確認
+#   - 開放資料集網址請到 https://data.cdc.gov.tw/ 搜尋各資料集後，
+#     複製其 CSV/JSON 下載連結（通常在 od.cdc.gov.tw 網域）
+
+# ── 新聞來源（每日抓取）──────────────────────────────
 feeds:
-  - name: 新聞稿
-    url: "https://www.cdc.gov.tw/RSS/RssXml/typeid/9"   # ← 請以疾管署 RSS 頁面上的實際網址為準
-  # - name: 致醫界通函
-  #   url: "https://www.cdc.gov.tw/RSS/RssXml/..."
+  - name: 新聞稿及疫情訊息
+    url: "https://www.cdc.gov.tw/RSS/RssXml/typeid/9"          # 需確認
+  - name: 國際旅遊疫情速訊
+    url: "https://www.cdc.gov.tw/RSS/RssXml/typeid/xx"         # 需確認
+  - name: 致醫界通函
+    url: "https://www.cdc.gov.tw/RSS/RssXml/typeid/xx"         # 需確認
 
-# 每次最多處理幾則新聞（控制 API 費用）
-max_items_per_run: 20
+# ── 關注疾病（週報統計區與重點速覽的白名單）────────────
+watch_diseases:
+  - 登革熱
+  - 流感
+  - 腸病毒
+  - COVID-19
 
-# 產出與資料目錄
+# ── 開放資料統計來源（週報產生時抓取）──────────────────
+# mode:
+#   line_list    每列一筆病例（用 date_field 依週計數），如登革熱每日確定病例
+#   weekly_count 每列已是統計值（date_field 取週、count_field 取數值加總）
+stats_datasets:
+  - disease: 登革熱
+    url: "https://od.cdc.gov.tw/eic/Dengue_Daily.csv"           # 需確認
+    mode: line_list
+    date_field: 發病日
+  - disease: 流感
+    url: "https://od.cdc.gov.tw/eic/NHI_Influenza_like_illness.csv"  # 需確認（健保類流感就診）
+    mode: weekly_count
+    date_field: 就診週
+    count_field: 就診人次
+  - disease: 腸病毒
+    url: "https://od.cdc.gov.tw/eic/NHI_EnteroviralInfection.csv"    # 需確認（健保腸病毒就診）
+    mode: weekly_count
+    date_field: 就診週
+    count_field: 就診人次
+  # COVID-19 資料集格式變動較頻繁，請至 data.cdc.gov.tw 確認後補上
+  # - disease: COVID-19
+  #   url: ""
+  #   mode: weekly_count
+  #   date_field: ""
+  #   count_field: ""
+
+# ── 一般設定 ─────────────────────────────────────────
+max_items_per_run: 30      # 每次抓取最多處理幾則新聞
 data_dir: data
 reports_dir: reports
 
