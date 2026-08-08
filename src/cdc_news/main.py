@@ -91,6 +91,16 @@ def probe(urls: list[str]) -> None:
         if misc_links:
             print("misc 連結：", misc_links[:20])
 
+        # push 陣列名稱與 Vlab 圖表的嵌入方式
+        push_names = sorted(set(re.findall(r"(\w+)\.push\(", script_text)))
+        if push_names:
+            print("push 陣列名稱：", push_names)
+        vidx = script_text.find("Vlab")
+        if vidx != -1:
+            start = max(0, vidx - 400)
+            print("--- Vlab 前後文 ---")
+            print(re.sub(r"\s{2,}", " ", script_text[start:vidx + 900].replace("\n", " "))[:1300])
+
         # NIDSS 內嵌圖表清單
         from .nidss import parse_charts
         from .stats import _parse_html_table
