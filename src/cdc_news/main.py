@@ -158,7 +158,8 @@ def verify(config: dict) -> None:
     for feed in config.get("feeds", []):
         try:
             if feed.get("type") == "html_list":
-                items = fetch_html_list(feed["name"], feed["url"])
+                items = fetch_html_list(feed["name"], feed["url"],
+                                        feed.get("link_contains", "/Detail/"))
             else:
                 items = fetch_feed(feed["name"], feed["url"])
             status = f"OK，取得 {len(items)} 則"

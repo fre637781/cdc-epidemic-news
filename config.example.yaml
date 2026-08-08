@@ -16,6 +16,7 @@ feeds:
     url: "https://www.cdc.gov.tw/Subscription/exList/5"
     type: html_list
     category: international
+    link_contains: EpaperPreview   # 速訊列表的項目連結不是 /Detail/ 模式
 
 # ── NIDSS 監測數據（週報「監測數據」段落，依類別分節）──
 # 資料直接解析 NIDSS 頁面內嵌圖表，不經 AI。

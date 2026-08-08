@@ -71,12 +71,14 @@ def fetch_feed(name: str, url: str) -> list[NewsItem]:
     return items
 
 
-def fetch_html_list(name: str, url: str) -> list[NewsItem]:
+def fetch_html_list(name: str, url: str,
+                    link_contains: str = "/Detail/") -> list[NewsItem]:
     """抓取網頁列表頁（非 RSS 來源），擷取項目連結。
 
-    以「連結網址含 /Detail/」作為項目判斷條件——疾管署的公告、
-    新聞與速訊詳細頁網址普遍符合此模式。發布日期無法從列表頁
-    可靠取得，留空（週報以「抓取日期」歸檔，不受影響）。
+    以「連結網址含 link_contains」作為項目判斷條件——疾管署的公告
+    與新聞詳細頁普遍是 /Detail/；旅遊疫情速訊等電子報列表則是
+    Subscription/EpaperPreview。若連結位於表格列中且同列有日期欄
+    （YYYY/MM/DD），一併取為發布日期。
     """
     try:
         resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
@@ -89,16 +91,22 @@ def fetch_html_list(name: str, url: str) -> list[NewsItem]:
     for a in soup.find_all("a", href=True):
         href = urljoin(url, a["href"])
         title = a.get_text(" ", strip=True)
-        if "/Detail/" not in href or not title or href in seen_links:
+        if link_contains not in href or not title or href in seen_links:
             continue
         seen_links.add(href)
+        published = ""
+        row = a.find_parent("tr")
+        if row:
+            m = re.search(r"\b(\d{4}/\d{1,2}/\d{1,2})\b", row.get_text(" ", strip=True))
+            if m:
+                published = m.group(1)
         items.append(
             NewsItem(
                 id=NewsItem.make_id(href),
                 source=name,
                 title=title,
                 link=href,
-                published="",
+                published=published,
                 body="",
             )
         )
@@ -157,7 +165,8 @@ def fetch_all(config: dict) -> list[NewsItem]:
     new_items: list[NewsItem] = []
     for feed in config.get("feeds", []):
         if feed.get("type") == "html_list":
-            fetched = fetch_html_list(feed["name"], feed["url"])
+            fetched = fetch_html_list(feed["name"], feed["url"],
+                                      feed.get("link_contains", "/Detail/"))
         else:
             fetched = fetch_feed(feed["name"], feed["url"])
         for item in fetched:
