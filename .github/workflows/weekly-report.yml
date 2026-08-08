@@ -42,3 +42,33 @@ jobs:
           git add data reports
           git diff --cached --quiet || git commit -m "chore: weekly CDC report $(date -u +%F)"
           git push
+
+      # ── Email 寄送（需設定 MAIL_USERNAME / MAIL_PASSWORD secrets）──
+      - name: Prepare email body
+        id: report
+        run: |
+          FILE=$(ls -t reports/2*-W*.md | head -1)
+          WEEK=$(basename "$FILE" .md)
+          {
+            echo "> 圖表完整版請開：https://github.com/${{ github.repository }}/blob/main/$FILE"
+            echo
+            cat "$FILE"
+          } > email-body.md
+          echo "file=$FILE"  >> "$GITHUB_OUTPUT"
+          echo "week=$WEEK"  >> "$GITHUB_OUTPUT"
+
+      - name: Send email
+        if: ${{ secrets.MAIL_USERNAME != '' }}
+        uses: dawidd6/action-send-mail@v4
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "疫情週報 ${{ steps.report.outputs.week }}"
+          to: ${{ secrets.MAIL_TO || secrets.MAIL_USERNAME }}
+          from: CDC 疫情週報 <${{ secrets.MAIL_USERNAME }}>
+          html_body: file://email-body.md
+          convert_markdown: true
+          attachments: reports/assets/${{ steps.report.outputs.week }}/*.png
