@@ -90,19 +90,40 @@ def build_report(config: dict, day: date | None = None) -> Path | None:
     ], config)
     lines += ["## 重點速覽", "", overview, ""]
 
+    # 國際來源（feed 設定 category: international）獨立成「國際重要疫情」段落
+    intl_names = {f["name"] for f in config.get("feeds", [])
+                  if f.get("category") == "international"}
+    intl = [s for s in summaries if s["_item"].source in intl_names]
+    domestic = [s for s in summaries if s["_item"].source not in intl_names]
+
+    if intl:
+        lines += ["## 國際重要疫情", ""]
+        severity_order = {"高": 0, "中": 1, "低": 2}
+        for s in sorted(intl, key=lambda s: (severity_order.get(s["severity"], 9),
+                                             s["region"], s["disease"])):
+            item: NewsItem = s["_item"]
+            lines.append(f"- **{s['region']}－{s['disease']}**"
+                         f"（關注程度：{s['severity']}）：{s['summary']}")
+            if s.get("advice"):
+                lines.append(f"  - 旅遊防疫建議：{s['advice']}")
+            lines.append(f"  - [原文連結]({item.link})")
+        lines.append("")
+
     # 依疾病分組：關注疾病（依設定順序）在前，其餘依名稱排序
     groups: dict[str, list[dict]] = {}
-    for s in summaries:
+    for s in domestic:
         groups.setdefault(s["disease"], []).append(s)
     ordered = [d for d in watch if d in groups]
     ordered += sorted(d for d in groups if d not in watch)
 
-    lines += ["## 本週公告摘要", ""]
+    lines += ["## 本週國內公告摘要", ""]
+    if not domestic:
+        lines += ["本週無新增國內疫情公告。", ""]
     for disease in ordered:
         lines.append(f"### {disease}")
         lines.append("")
         for s in groups[disease]:
-            item: NewsItem = s["_item"]
+            item = s["_item"]
             lines += [
                 f"#### {item.title}",
                 "",

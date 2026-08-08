@@ -11,6 +11,11 @@ feeds:
   - name: 國際旅遊疫情
     url: "https://www.cdc.gov.tw/TravelEpidemic/Index/RzNQU2F5L2RhZmRBd2pzWU5tM0NDQT09"
     type: html_list
+    category: international   # 週報獨立成「國際重要疫情」段落
+  - name: 旅遊疫情速訊
+    url: "https://www.cdc.gov.tw/Subscription/exList/5"
+    type: html_list
+    category: international
 
 # ── NIDSS 監測數據（週報「監測數據」段落，依類別分節）──
 # 資料直接解析 NIDSS 頁面內嵌圖表，不經 AI。

@@ -20,7 +20,7 @@ SUMMARY_SCHEMA = {
             "enum": ["高", "中", "低", "不適用"],
             "description": "依病例數變化與疾管署警示用語判斷的關注程度",
         },
-        "region": {"type": "string", "description": "影響地區，如：台南市、全國；無特定地區填「全國」"},
+        "region": {"type": "string", "description": "影響地區：國內新聞填縣市或「全國」；國際疫情新聞填國家或地區名稱，如「加拿大」"},
         "case_summary": {"type": "string", "description": "病例數與疫情趨勢的一句話摘要"},
         "summary": {"type": "string", "description": "新聞重點摘要，2-4 句"},
         "advice": {"type": "string", "description": "對民眾的防疫建議，1-2 句"},
