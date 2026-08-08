@@ -13,8 +13,8 @@ feeds:
     url: "https://www.cdc.gov.tw/RSS/RssXml/Hh094B49-DRwe2RR4eFfrQ?type=1"
   - name: 疾管署 RSS（二）
     url: "https://www.cdc.gov.tw/RSS/RssXml/khD5i5xbqmYc8zCDhJimNg?type=1"
-  - name: 國際旅遊疫情速訊
-    url: "https://www.cdc.gov.tw/Subscription/exList/5"
+  - name: 國際旅遊疫情
+    url: "https://www.cdc.gov.tw/TravelEpidemic/Index/RzNQU2F5L2RhZmRBd2pzWU5tM0NDQT09"
     type: html_list
 
 # ── 關注疾病（週報統計區與重點速覽的白名單）────────────
