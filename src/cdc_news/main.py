@@ -48,6 +48,18 @@ def probe(urls: list[str]) -> None:
         soup = BeautifulSoup(text, "html.parser")
         if soup.title:
             print("頁面標題：", soup.title.get_text(strip=True))
+        # 連結模式統計與樣本（診斷列表頁的項目連結長相）
+        from collections import Counter
+        from urllib.parse import urljoin as _uj
+        hrefs = [_uj(url, a["href"]) for a in soup.find_all("a", href=True)]
+        pattern = Counter(re.sub(r"[A-Za-z0-9_%=-]{10,}", "*", h.split("?")[0])
+                          for h in hrefs)
+        print("連結模式：", pattern.most_common(12))
+        samples = [(a.get_text(" ", strip=True)[:45], _uj(url, a["href"]))
+                   for a in soup.find_all("a", href=True)
+                   if len(a.get_text(strip=True)) > 8][:12]
+        for t, h in samples:
+            print(f"  連結樣本：「{t}」 {h[:110]}")
         # 表單欄位（找出篩選參數名稱，如本土/境外）
         for f in soup.find_all("form")[:5]:
             print(f"表單 action={f.get('action')} method={f.get('method')}")

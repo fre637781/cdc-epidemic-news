@@ -264,8 +264,8 @@ def _render_item(item: dict, anchor: tuple[int, int] | None,
         for k, v in thresholds.items():
             head += f"（{k} {_fmt(v)}）"
         lines.append(head)
-        # 有趨勢圖時分項組成由圖表呈現，不再列文字明細
-        if len(groups) > 1 and not image_line:
+        # 有趨勢圖時分項組成由圖表呈現（sources 分項已標在行內），不再列明細
+        if len(groups) > 1 and not image_line and not item.get("sources"):
             shown = "、".join(f"{k} {_fmt(v)}" for k, v in groups[:MAX_GROUPS])
             more = f"⋯（另 {len(groups) - MAX_GROUPS} 類）" if len(groups) > MAX_GROUPS else ""
             lines.append(f"  - {shown}{more}")
