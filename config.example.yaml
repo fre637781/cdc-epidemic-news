@@ -1,0 +1,18 @@
+# 複製為 config.yaml 後修改
+# 疾管署 RSS feed 清單：請到 https://www.cdc.gov.tw/RSS 確認實際網址
+feeds:
+  - name: 新聞稿
+    url: "https://www.cdc.gov.tw/RSS/RssXml/typeid/9"   # ← 請以疾管署 RSS 頁面上的實際網址為準
+  # - name: 致醫界通函
+  #   url: "https://www.cdc.gov.tw/RSS/RssXml/..."
+
+# 每次最多處理幾則新聞（控制 API 費用）
+max_items_per_run: 20
+
+# 產出與資料目錄
+data_dir: data
+reports_dir: reports
+
+# Claude 模型設定
+model: claude-opus-5
+max_tokens: 16000

@@ -1,0 +1,41 @@
+# 每日自動抓取疾管署新聞並產生摘要報告
+name: Daily CDC report
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # UTC 00:00 = 台北時間 08:00
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Prepare config
+        run: |
+          if [ ! -f config.yaml ]; then cp config.example.yaml config.yaml; fi
+
+      - name: Fetch news and build report
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PYTHONPATH: src
+        run: python -m cdc_news.main run
+
+      - name: Commit report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data reports
+          git diff --cached --quiet || git commit -m "chore: daily CDC report $(date -u +%F)"
+          git push
