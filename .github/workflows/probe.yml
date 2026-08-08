@@ -1,0 +1,28 @@
+# 開發診斷用：探測資料來源網頁/端點的結構（不呼叫 Claude API）
+name: Probe sources
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: "要探測的網址（空白分隔）"
+        required: true
+        type: string
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Probe URLs
+        env:
+          PYTHONPATH: src
+        run: python -m cdc_news.main probe ${{ inputs.urls }}

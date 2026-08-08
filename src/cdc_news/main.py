@@ -5,19 +5,84 @@
     python -m cdc_news.main report   # 產生上一週的疫情週報
     python -m cdc_news.main run      # 抓取 + 週報
     python -m cdc_news.main verify   # 檢測所有來源網址與欄位設定（不呼叫 AI）
+    python -m cdc_news.main probe URL [URL...]   # 探測網頁/資料端點結構（開發診斷用）
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
+import requests
 import yaml
+from bs4 import BeautifulSoup
 
-from .fetcher import fetch_all, fetch_feed, fetch_html_list
+from .fetcher import USER_AGENT, fetch_all, fetch_feed, fetch_html_list
 from .report import build_report
 from .stats import fetch_rows, weekly_counts
+
+
+def probe(urls: list[str]) -> None:
+    """探測網址回應的結構：表格、iframe、內嵌圖表設定、資料端點線索。"""
+    for url in urls:
+        print("=" * 70)
+        print("URL:", url)
+        try:
+            resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=60)
+        except Exception as exc:
+            print(f"✗ 連線失敗：{type(exc).__name__}: {exc}")
+            continue
+        ct = resp.headers.get("Content-Type", "")
+        text = resp.content.decode("utf-8-sig", errors="replace")
+        print(f"status={resp.status_code} content-type={ct} bytes={len(resp.content)}")
+
+        if "json" in ct or url.endswith(".json"):
+            print("JSON 開頭：", text[:600].replace("\n", " "))
+            continue
+        if "html" not in ct and not text.lstrip().startswith("<"):
+            print("純文字開頭：", text[:600])
+            continue
+
+        soup = BeautifulSoup(text, "html.parser")
+        if soup.title:
+            print("頁面標題：", soup.title.get_text(strip=True))
+        iframes = [i.get("src") for i in soup.find_all("iframe")]
+        if iframes:
+            print("iframes：", iframes[:20])
+        tables = soup.find_all("table")
+        print(f"表格數：{len(tables)}")
+        for t in tables[:5]:
+            trs = t.find_all("tr")
+            if trs:
+                headers = [c.get_text(strip=True) for c in trs[0].find_all(["th", "td"])]
+                print(f"  表頭：{headers[:12]}（共 {len(trs) - 1} 列）")
+
+        script_text = "\n".join(s.get_text() for s in soup.find_all("script"))
+        print("script 關鍵字：",
+              {p: script_text.count(p) for p in ("Highcharts", "series", "categories", "getJSON", "ajax")})
+        titles = re.findall(
+            r"title\s*:\s*\{[^{}]*?text\s*:\s*['\"]([^'\"]{2,80})['\"]", script_text)
+        if titles:
+            print("圖表標題：", titles[:25])
+        cats = re.findall(r"categories\s*:\s*(\[[^\]]{0,200})", script_text)
+        if cats:
+            print("categories 樣本：", cats[0][:200])
+        series_names = re.findall(r"name\s*:\s*['\"]([^'\"]{1,40})['\"]", script_text)
+        if series_names:
+            print("series 名稱：", series_names[:40])
+        script_urls = sorted(set(re.findall(
+            r"['\"]((?:https?://[^'\"]+|/[A-Za-z0-9_/.\-]+)(?:\?[^'\"]{0,120})?)['\"]",
+            script_text)))
+        interesting = [u for u in script_urls
+                       if any(k in u.lower() for k in ("misc", "json", "csv", "chart", "data", "lars"))]
+        if interesting:
+            print("script 內的資料網址線索：", interesting[:40])
+        misc_links = sorted({a["href"] for a in soup.find_all("a", href=True)
+                             if "misc" in a["href"].lower()})
+        if misc_links:
+            print("misc 連結：", misc_links[:20])
 
 
 def verify(config: dict) -> None:
@@ -78,9 +143,14 @@ def load_config(path: str = "config.yaml") -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="CDC 疫情新聞回報與整理摘要")
-    parser.add_argument("command", choices=["fetch", "report", "run", "verify"])
+    parser.add_argument("command", choices=["fetch", "report", "run", "verify", "probe"])
+    parser.add_argument("urls", nargs="*", help="probe 指令的目標網址")
     parser.add_argument("--config", default="config.yaml", help="設定檔路徑")
     args = parser.parse_args()
+
+    if args.command == "probe":
+        probe(args.urls)
+        return
 
     config = load_config(args.config)
 
