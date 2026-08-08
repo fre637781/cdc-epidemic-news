@@ -80,6 +80,12 @@ def probe(urls: list[str]) -> None:
             if trs:
                 headers = [c.get_text(strip=True) for c in trs[0].find_all(["th", "td"])]
                 print(f"  表頭：{headers[:12]}（共 {len(trs) - 1} 列）")
+                for tr in trs[1:4]:  # 前幾列的內容與連結
+                    cells = [c.get_text(" ", strip=True)[:60] for c in tr.find_all(["th", "td"])]
+                    links = [_uj(url, a["href"]) for a in tr.find_all("a", href=True)]
+                    print(f"    列：{cells}")
+                    for lk in links[:3]:
+                        print(f"      → {lk[:130]}")
 
         script_text = "\n".join(s.get_text() for s in soup.find_all("script"))
         print("script 關鍵字：",
