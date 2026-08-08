@@ -64,7 +64,7 @@ nidss_monitor:
             url: "https://nidss.cdc.gov.tw/nndss/Disease?id=487a"
             form: {pty_immigration_value: "1"}
         summary_url: "https://nidss.cdc.gov.tw/nndss/Disease?id=487a"
-      - name: 全國每週流感病毒分子生物學檢出（各型別占比）
+      - name: 全國每週流感病毒分子生物學檢出
         url: "https://nidss.cdc.gov.tw/Home/Index?op=2"
         title_contains: 流感病毒分子生物學
         chart_type: share
