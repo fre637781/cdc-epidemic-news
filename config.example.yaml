@@ -17,6 +17,10 @@ feeds:
 # title_contains: 圖表標題關鍵字（空白分隔、須全部命中）
 # series_keyword: 只顯示名稱含此關鍵字的 series（過濾排除病例/閾值線）
 # summary_url:   疾病頁網址，附上「上週累計/今年累計/去年總數/死亡數」摘要
+# chart_type:    line（預設折線）/ bar（堆疊長條）/ share（100% 占比長條）
+# sources:       多個表單查詢合併為一張圖（如本土/境外移入各一條線）
+chart_weeks: 78            # 趨勢圖時間範圍（週），78 週＝一年半，可比較去年同期
+
 nidss_monitor:
   - section: 呼吸道病原體（整體）
     items:
@@ -29,42 +33,61 @@ nidss_monitor:
 
   - section: 新冠（COVID-19）
     items:
-      - name: 新冠併發重症（本土＋境外移入）
-        url: "https://nidss.cdc.gov.tw/Home/Index?op=6"
-        title_contains: 新冠併發重症
+      - name: 新冠併發重症
         series_keyword: 確定
+        sources:
+          - label: 本土
+            url: "https://nidss.cdc.gov.tw/nndss/Disease?id=19SC"
+            form: {pty_immigration_value: "0"}
+          - label: 境外移入
+            url: "https://nidss.cdc.gov.tw/nndss/Disease?id=19SC"
+            form: {pty_immigration_value: "1"}
         summary_url: "https://nidss.cdc.gov.tw/nndss/Disease?id=19SC"
       - name: 每週新冠病毒變異株檢出——本土
         url: "https://nidss.cdc.gov.tw/Home/Index?op=6"
         title_contains: 變異株檢出本土
+        chart_type: share
       - name: 每週新冠病毒變異株檢出——境外移入
         url: "https://nidss.cdc.gov.tw/Home/Index?op=6"
         title_contains: 變異株檢出境外移入
+        chart_type: share
 
   - section: 流感
     items:
-      - name: 流感併發重症（本土＋境外移入）
-        url: "https://nidss.cdc.gov.tw/Home/Index?op=2"
-        title_contains: 流感併發重症
+      - name: 流感併發重症
         series_keyword: 確定
+        sources:
+          - label: 本土
+            url: "https://nidss.cdc.gov.tw/nndss/Disease?id=487a"
+            form: {pty_immigration_value: "0"}
+          - label: 境外移入
+            url: "https://nidss.cdc.gov.tw/nndss/Disease?id=487a"
+            form: {pty_immigration_value: "1"}
         summary_url: "https://nidss.cdc.gov.tw/nndss/Disease?id=487a"
-      - name: 全國每週流感病毒分子生物學檢出
+      - name: 全國每週流感病毒分子生物學檢出（各型別占比）
         url: "https://nidss.cdc.gov.tw/Home/Index?op=2"
         title_contains: 流感病毒分子生物學
+        chart_type: share
       - name: LARS 每週流感病毒陽性檢體
         url: "https://nidss.cdc.gov.tw/Home/Index?op=2"
         title_contains: 流感病毒陽性檢體
 
   - section: 腸病毒
     items:
-      - name: 腸病毒感染併發重症（本土＋境外移入）
-        url: "https://nidss.cdc.gov.tw/Home/Index?op=1"
-        title_contains: 腸病毒感染併發重症
+      - name: 腸病毒感染併發重症
         series_keyword: 確定
+        sources:
+          - label: 本土
+            url: "https://nidss.cdc.gov.tw/nndss/Disease?id=0749"
+            form: {pty_immigration_value: "0"}
+          - label: 境外移入
+            url: "https://nidss.cdc.gov.tw/nndss/Disease?id=0749"
+            form: {pty_immigration_value: "1"}
         summary_url: "https://nidss.cdc.gov.tw/nndss/Disease?id=0749"
       - name: 全國每週腸病毒分子生物學檢出
         url: "https://nidss.cdc.gov.tw/Home/Index?op=1"
         title_contains: 腸病毒分子生物學
+        chart_type: bar
       - name: 腸病毒健保門急診就診人次
         url: "https://nidss.cdc.gov.tw/Home/Index?op=1"
         title_contains: 腸病毒健保門急診就診人次

@@ -59,13 +59,23 @@ class Page:
 _page_cache: dict[str, Page] = {}
 
 
-def fetch_page(url: str) -> Page:
-    """抓取並解析 NIDSS 頁面（同一執行內快取同網址）。"""
-    if url in _page_cache:
-        return _page_cache[url]
-    resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
-    resp.raise_for_status()
-    text = resp.content.decode("utf-8-sig", errors="replace")
+def fetch_page(url: str, form: dict | None = None) -> Page:
+    """抓取並解析 NIDSS 頁面（同一執行內快取同查詢）。
+
+    form 給定時改用表單查詢：先 GET 取得防偽 token 與預設欄位，
+    覆寫指定欄位（如 pty_immigration_value 篩選本土/境外）後 POST。
+    """
+    key = url if not form else url + "##" + "&".join(
+        f"{k}={v}" for k, v in sorted(form.items()))
+    if key in _page_cache:
+        return _page_cache[key]
+    if form:
+        text = _post_form(url, form)
+    else:
+        resp = requests.get(url, headers={"User-Agent": USER_AGENT},
+                            timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        text = resp.content.decode("utf-8-sig", errors="replace")
     charts, errors = parse_charts(text)
     page = Page(
         url=url,
@@ -74,8 +84,48 @@ def fetch_page(url: str) -> Page:
         current_week=parse_current_week(text),
         summary=parse_summary_table(text),
     )
-    _page_cache[url] = page
+    _page_cache[key] = page
     return page
+
+
+def _post_form(url: str, overrides: dict) -> str:
+    """送出頁面上的查詢表單（覆寫部分欄位），回傳回應 HTML。"""
+    from urllib.parse import urljoin
+
+    session = requests.Session()
+    resp = session.get(url, headers={"User-Agent": USER_AGENT},
+                       timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.content.decode("utf-8-sig", errors="replace"),
+                         "html.parser")
+
+    target = None  # 含有要覆寫欄位的那個表單
+    for f in soup.find_all("form"):
+        names = {el.get("name") for el in f.find_all(["input", "select"])}
+        if overrides.keys() & names:
+            target = f
+            break
+    if target is None:
+        raise ValueError(f"頁面上找不到含 {list(overrides)} 欄位的表單")
+
+    data: list[tuple[str, str]] = []
+    for el in target.find_all("input"):
+        if el.get("name") and el.get("type") not in ("submit", "button"):
+            data.append((el["name"], el.get("value", "")))
+    for el in target.find_all("select"):
+        if not el.get("name"):
+            continue
+        opt = el.find("option", selected=True) or el.find("option")
+        data.append((el["name"], (opt.get("value") or "") if opt else ""))
+    data = [(k, str(overrides.get(k, v))) for k, v in data]
+    present = {k for k, _ in data}
+    data += [(k, str(v)) for k, v in overrides.items() if k not in present]
+
+    action = urljoin(url, target.get("action") or url)
+    resp = session.post(action, data=data, headers={"User-Agent": USER_AGENT},
+                        timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
+    return resp.content.decode("utf-8-sig", errors="replace")
 
 
 def parse_charts(text: str) -> tuple[list[Chart], list[str]]:

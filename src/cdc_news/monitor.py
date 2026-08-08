@@ -122,18 +122,43 @@ def _render_chart(item: dict, chart: Chart, chart_ctx: dict) -> str | None:
     return f"![{item.get('name', '')} 趨勢圖]({chart_ctx['prefix']}/{filename})"
 
 
+def _merged_chart(item: dict) -> Chart:
+    """依 item['sources'] 抓多個查詢（如本土/境外的表單查詢），合併為一張圖。
+
+    每個 source 取一條符合 series_keyword 的 series，改以 source 的
+    label 命名，組成同一張多 series 的 Chart。
+    """
+    keyword = item.get("series_keyword")
+    merged: dict[str, list] = {}
+    weeks: list[str] | None = None
+    suffix = ""
+    for src in item["sources"]:
+        page = fetch_page(src["url"], form=src.get("form"))
+        chart = find_chart(page.charts, item.get("title_contains"))
+        if chart is None:
+            raise ValueError(f"「{src.get('label', '?')}」查詢找不到對應圖表")
+        names = [n for n in chart.series if keyword and keyword in n] or list(chart.series)
+        if weeks is None:
+            weeks, suffix = chart.weeks, chart.suffix
+        merged[src.get("label", names[0])] = chart.series[names[0]]
+    return Chart(title=item.get("name", ""), weeks=weeks or [],
+                 suffix=suffix, series=merged)
+
+
 def _render_item(item: dict, anchor: tuple[int, int] | None,
                  chart_ctx: dict | None = None) -> list[str]:
     name = item.get("name", "?")
     try:
-        page = fetch_page(item["url"])
+        if item.get("sources"):
+            chart = _merged_chart(item)
+        else:
+            page = fetch_page(item["url"])
+            chart = find_chart(page.charts, item.get("title_contains"))
+            if chart is None:
+                titles = "、".join((c.title or "（無標題）") for c in page.charts[:8])
+                return [f"- **{name}**：⚠ 找不到對應圖表；頁面現有圖表：{titles}"]
     except Exception as exc:
         return [f"- **{name}**：頁面抓取失敗（{type(exc).__name__}）"]
-
-    chart = find_chart(page.charts, item.get("title_contains"))
-    if chart is None:
-        titles = "、".join((c.title or "（無標題）") for c in page.charts[:8])
-        return [f"- **{name}**：⚠ 找不到對應圖表；頁面現有圖表：{titles}"]
 
     if anchor:
         year, week = anchor
@@ -175,6 +200,8 @@ def _render_item(item: dict, anchor: tuple[int, int] | None,
     else:
         total = sum(counts.values())
         head = f"- **{name}**（{_pretty(label)}）：共 {_fmt(total)}{suffix}"
+        if item.get("sources") and len(groups) > 1:  # 本土/境外等分項直接標在行內
+            head += "（" + "、".join(f"{k} {_fmt(v)}" for k, v in groups) + "）"
         prev_total = sum(prev_counts.values())
         if prev_total:
             diff = total - prev_total
