@@ -72,12 +72,21 @@ def _tick_labels(weeks: list[str], positions: list[int]) -> list[str]:
 def render_trend(chart: Chart, count_names: list[str], threshold_names: list[str],
                  title: str, out_path: Path, weeks_window: int = DEFAULT_WEEKS) -> bool:
     """畫一張趨勢圖；沒有可畫的計數 series 時回傳 False。"""
+    count_names = [n for n in count_names if n in chart.series]
     if not count_names:
         return False
     _setup_fonts()
 
-    weeks = chart.weeks[-weeks_window:]
-    start = len(chart.weeks) - len(weeks)
+    # NIDSS 的週分類常涵蓋整年（未來週為空值），先修剪頭尾整段無資料的週
+    n_weeks = len(chart.weeks)
+    full = {n: [(chart.series[n][j] if j < len(chart.series[n]) else None)
+                for j in range(n_weeks)] for n in count_names}
+    idxs = [j for j in range(n_weeks) if any(v[j] is not None for v in full.values())]
+    if not idxs:
+        return False
+    hi = idxs[-1]
+    start = max(idxs[0], hi - weeks_window + 1)
+    weeks = chart.weeks[start:hi + 1]
     x = list(range(len(weeks)))
 
     # 依窗格內總量排序決定畫線與配色順序；超出色盤的合併為「其他」
@@ -97,7 +106,7 @@ def render_trend(chart: Chart, count_names: list[str], threshold_names: list[str
             vals = [v for name in rest
                     if (v := _window_values(chart, name, start, len(weeks))[j]) is not None]
             merged.append(sum(vals) if vals else None)
-        folded.append((f"其他（{len(rest)} 類）", merged))
+        folded.append((f"其餘 {len(rest)} 類合併", merged))
 
     fig, ax = plt.subplots(figsize=(8, 3.2), dpi=150)
     fig.patch.set_facecolor(SURFACE)
@@ -105,18 +114,22 @@ def render_trend(chart: Chart, count_names: list[str], threshold_names: list[str
 
     for i, (name, values) in enumerate(folded):
         color = PALETTE[i % len(PALETTE)]
-        ax.plot(x, values, lw=2, color=color, label=name, solid_capstyle="round")
-        if len(folded) <= 4:  # 少量 series 時在線尾直接標值
-            for j in range(len(values) - 1, -1, -1):
-                if values[j] is not None:
-                    ax.annotate(f"{values[j]:,.0f}", (x[j], values[j]),
-                                xytext=(5, 0), textcoords="offset points",
-                                fontsize=8, color=color, va="center")
-                    break
+        # 稀疏資料（中間有缺週）折線會斷裂，加上資料點標記讓孤點可見
+        present = [j for j, v in enumerate(values) if v is not None]
+        sparse = bool(present) and (present[-1] - present[0] + 1) > len(present)
+        ax.plot(x, values, lw=2, color=color, label=name, solid_capstyle="round",
+                marker="o" if sparse else None, markersize=3.5)
+        if len(folded) <= 4 and present:  # 少量 series 時在線尾直接標值
+            j = present[-1]
+            ax.annotate(f"{values[j]:,.0f}", (x[j], values[j]),
+                        xytext=(5, 0), textcoords="offset points",
+                        fontsize=8, color=color, va="center")
 
-    for name in threshold_names:
+    dashes = ["--", (0, (1, 1.5)), (0, (4, 1.5, 1, 1.5))]
+    for i, name in enumerate(threshold_names):
         values = _window_values(chart, name, start, len(weeks))
-        ax.plot(x, values, lw=1.5, ls="--", color=THRESHOLD, label=name)
+        ax.plot(x, values, lw=1.5, ls=dashes[i % len(dashes)],
+                color=THRESHOLD, label=name)
 
     ax.set_title(title, loc="left", fontsize=11, color=INK, pad=10)
     ax.set_ylim(bottom=0)
