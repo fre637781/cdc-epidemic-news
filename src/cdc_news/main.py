@@ -62,16 +62,23 @@ def probe(urls: list[str]) -> None:
         script_text = "\n".join(s.get_text() for s in soup.find_all("script"))
         print("script 關鍵字：",
               {p: script_text.count(p) for p in ("Highcharts", "series", "categories", "getJSON", "ajax")})
-        titles = re.findall(
-            r"title\s*:\s*\{[^{}]*?text\s*:\s*['\"]([^'\"]{2,80})['\"]", script_text)
-        if titles:
-            print("圖表標題：", titles[:25])
-        cats = re.findall(r"categories\s*:\s*(\[[^\]]{0,200})", script_text)
-        if cats:
-            print("categories 樣本：", cats[0][:200])
-        series_names = re.findall(r"name\s*:\s*['\"]([^'\"]{1,40})['\"]", script_text)
+        series_names = re.findall(r"['\"]?name['\"]?\s*:\s*['\"]([^'\"]{1,50})['\"]", script_text)
         if series_names:
-            print("series 名稱：", series_names[:40])
+            print("series 名稱：", series_names[:50])
+        # 印出前幾段含 series 的 script 片段，供分析內嵌資料結構
+        shown = 0
+        pos = 0
+        while shown < 4:
+            idx = script_text.find("series", pos)
+            if idx == -1:
+                break
+            start = max(0, idx - 200)
+            excerpt = script_text[start:idx + 1300].replace("\n", " ")
+            excerpt = re.sub(r"\s{2,}", " ", excerpt)
+            print(f"--- series 片段 {shown + 1} ---")
+            print(excerpt[:1400])
+            pos = idx + 1500
+            shown += 1
         script_urls = sorted(set(re.findall(
             r"['\"]((?:https?://[^'\"]+|/[A-Za-z0-9_/.\-]+)(?:\?[^'\"]{0,120})?)['\"]",
             script_text)))

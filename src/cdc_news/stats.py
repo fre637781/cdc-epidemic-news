@@ -57,21 +57,27 @@ def _parse_week(value: str) -> str | None:
 
 
 def _parse_html_table(text: str) -> list[dict]:
-    """解析頁面中的第一個 <table>，以表頭列為欄位名回傳 dict 列表。"""
+    """解析頁面中資料列最多的 <table>，回傳 dict 列表。
+
+    表頭取「欄位數最多的第一列」——NIDSS 表格常在最上方有跨欄的
+    說明文字列，不能直接拿第一列當表頭。
+    """
     soup = BeautifulSoup(text, "html.parser")
-    table = soup.find("table")
-    if table is None:
-        return []
-    trs = table.find_all("tr")
-    if not trs:
-        return []
-    headers = [c.get_text(strip=True) for c in trs[0].find_all(["th", "td"])]
-    rows: list[dict] = []
-    for tr in trs[1:]:
-        cells = [c.get_text(strip=True) for c in tr.find_all(["td", "th"])]
-        if len(cells) == len(headers):
-            rows.append(dict(zip(headers, cells)))
-    return rows
+    best: list[dict] = []
+    for table in soup.find_all("table"):
+        trs = table.find_all("tr")
+        if not trs:
+            continue
+        cell_rows = [[c.get_text(strip=True) for c in tr.find_all(["th", "td"])] for tr in trs]
+        max_cols = max(len(r) for r in cell_rows)
+        if max_cols < 2:
+            continue
+        header_idx = next(i for i, r in enumerate(cell_rows) if len(r) == max_cols)
+        headers = cell_rows[header_idx]
+        rows = [dict(zip(headers, r)) for r in cell_rows[header_idx + 1:] if len(r) == max_cols]
+        if len(rows) > len(best):
+            best = rows
+    return best
 
 
 def fetch_rows(url: str) -> list[dict]:
