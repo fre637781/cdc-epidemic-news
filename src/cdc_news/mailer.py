@@ -28,6 +28,37 @@ STYLE = (
     "max-width:860px;margin:0 auto;padding:16px;color:#222;line-height:1.7"
 )
 
+# 重點速覽卡片：依燈號決定左側色條
+CARD_COLORS = {"🔴": "#d03b3b", "🟠": "#eb6834", "🟢": "#0ca30c", "⚪": "#898781"}
+_CARD_LINE = re.compile(
+    r"^- (🔴|🟠|🟢|⚪) \*\*(.+?)\*\*(?:：(.*))?$", re.M)
+
+
+def _overview_cards(text: str) -> str:
+    """把「重點速覽」段落的燈號條列改寫成 HTML 警示卡片。
+
+    Markdown 轉 HTML 時原始 HTML 區塊會原樣通過，GitHub 上的 .md
+    仍是條列格式不受影響（此轉換只作用於信件）。
+    """
+    m = re.search(r"(## 重點速覽\n+)(.*?)(?=\n## |\Z)", text, re.S)
+    if not m:
+        return text
+
+    def card(cm: re.Match) -> str:
+        emoji, headline, detail = cm.group(1), cm.group(2), cm.group(3)
+        color = CARD_COLORS.get(emoji, CARD_COLORS["⚪"])
+        detail_html = (f'<div style="color:#52514e;font-size:14px;margin-top:3px">'
+                       f'{detail}</div>' if detail else "")
+        return (f'<div style="border-left:4px solid {color};background:#f7f6f3;'
+                f'padding:10px 14px;margin:10px 0;border-radius:0 8px 8px 0">'
+                f'<div style="font-weight:700">{emoji} {headline}</div>'
+                f'{detail_html}</div>')
+
+    section, n = _CARD_LINE.subn(card, m.group(2))
+    if not n:  # 舊格式（無燈號條列）就維持原樣
+        return text
+    return text[:m.start()] + m.group(1) + section + text[m.end():]
+
 
 def build_message(report_path: Path) -> EmailMessage:
     text = report_path.read_text(encoding="utf-8")
@@ -54,6 +85,7 @@ def build_message(report_path: Path) -> EmailMessage:
                 f'display:block;margin:8px 0">')
 
     text = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", replace_image, text)
+    text = _overview_cards(text)
     body = markdown.markdown(text, extensions=["tables", "sane_lists"])
     html = f'<html><body style="{STYLE}">{body}</body></html>'
 
