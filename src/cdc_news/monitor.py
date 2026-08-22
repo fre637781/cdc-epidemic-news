@@ -9,6 +9,7 @@
             title_contains: 圖表標題關鍵字（空白分隔、須全部命中；省略時取第一張）
             series_keyword: 只顯示名稱含此關鍵字的 series（如「確定」）
             summary_url: 疾病頁網址（附上累計統計摘要）
+            report_lag: 通報延遲週數（如併發重症設 1，改取再前一週的較穩定數字）
 
 統計的目標週為「上一完整週」，以 NIDSS 頁面自帶的「本週為N週」文字
 為準（NIDSS 週編號與 ISO 週不同）。若某圖表資料落後（如變異株定序），
@@ -68,6 +69,20 @@ def _today_week() -> tuple[int, int]:
     僅作為上限，避免誤取圖表尾端以 0 填滿的未來週次）。"""
     year, week, _ = date.today().isocalendar()
     return year, week
+
+
+def _target_label(anchor: tuple[int, int], lag: int = 0) -> str:
+    """目標週標籤：上一完整週，再往前 lag 週（通報延遲用）。
+
+    跨年時往前一年遞補（NIDSS 一年最多 53 週；該年若只有 52 週，
+    取「不晚於目標週的最後一週」時自然會落在第 52 週）。
+    """
+    year, week = anchor
+    week -= 1 + lag
+    while week < 1:
+        year -= 1
+        week += 53
+    return week_label(year, week)
 
 
 def _counts(vals: dict) -> dict:
@@ -223,7 +238,7 @@ def _render_years_item(item: dict, chart: Chart, anchor: tuple[int, int] | None,
     # 目標為上一完整週；該週無資料時退到今年最後有資料的一週
     idx = None
     if anchor and anchor[1] > 1:
-        wk = anchor[1] - 1
+        wk = anchor[1] - 1 - int(item.get("report_lag", 0))
         for fmt in (f"{wk:02d}", str(wk)):
             if fmt in chart.weeks:
                 idx = chart.weeks.index(fmt)
@@ -281,9 +296,7 @@ def _render_item(item: dict, anchor: tuple[int, int] | None,
         return _render_years_item(item, chart, anchor, chart_ctx)
 
     if anchor:
-        year, week = anchor
-        # 上一完整週；跨年時以「前一年最大週」為上限
-        target = week_label(year, week - 1) if week > 1 else f"{year - 1}99"
+        target = _target_label(anchor, int(item.get("report_lag", 0)))
     else:
         target = chart.weeks[-1]
 
@@ -370,7 +383,8 @@ def build_monitor_sections(config: dict, charts_dir: Path | None = None,
     if lines and anchor:
         lines.append(
             f"> 數據取自 NIDSS（目前為 {anchor[0]}年第{anchor[1]}週，統計上一完整週；"
-            "定序類資料有時間落後，以各項標示的週次為準）。最新資料可能因後續回報而變動。"
+            "定序類資料與通報有時間落後，併發重症等項目改取再前一週，"
+            "以各項標示的週次為準）。最新資料可能因後續回報而變動。"
         )
         lines.append("")
     return lines
