@@ -77,12 +77,18 @@ def _counts(vals: dict) -> dict:
 
 
 def _unfilled(chart: Chart, index: int, vals: dict) -> bool:
-    """判斷該週是否為「尚未填報」——NIDSS 的近兩年圖以 0（非 null）填滿
-    尚未發生或尚未回報的週次，若該指標近期本來就有量，0 即代表未更新。"""
+    """判斷該週是否為「尚未填報」。
+
+    NIDSS 的近兩年圖把尚未發生或尚未回報的週次以 0 或 null 填滿，只留下
+    流行閾值之類的固定數列，兩種情形都會讓該週看起來是「共 0」。若該指標
+    近幾週本來就有量，這一週沒有數字就是還沒更新。"""
     counts = _counts(vals)
-    if not counts or any(counts.values()):
+    if any(counts.values()):
         return False
-    for j in range(max(0, index - ZERO_LOOKBACK), index):
+    # 整週連數字都沒有（只剩閾值之類的固定數列）時，往前找到有資料為止；
+    # 有數字但為 0 時只回看近幾週，才不會把長期為 0 的重症類指標誤判
+    lookback = index if not counts else ZERO_LOOKBACK
+    for j in range(max(0, index - lookback), index):
         earlier = chart.week_values(chart.weeks[j])
         if earlier and any(_counts(earlier).values()):
             return True
