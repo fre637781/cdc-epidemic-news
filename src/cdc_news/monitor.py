@@ -12,17 +12,20 @@
 
 統計的目標週為「上一完整週」，以 NIDSS 頁面自帶的「本週為N週」文字
 為準（NIDSS 週編號與 ISO 週不同）。若某圖表資料落後（如變異株定序），
-自動退到該圖表最近有資料的一週並標示。
+自動退到該圖表最近有資料的一週並標示。NIDSS 的「近兩年」圖會把尚未
+發生或尚未回報的週次以 0（而非 null）填滿，這類週次視同無資料略過。
 """
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 from .nidss import Chart, fetch_page, find_chart, week_label
 
 SUMMARY_PATTERNS = ("上週累計", "今年累計數", "去年總數", "死亡")
 MAX_GROUPS = 10
+ZERO_LOOKBACK = 8   # 判斷「本週 0 是尚未填報」時回看的週數
 
 
 def _is_pct(name: str) -> bool:
@@ -60,6 +63,32 @@ def _anchor_week(config: dict) -> tuple[int, int] | None:
     return None
 
 
+def _today_week() -> tuple[int, int]:
+    """頁面說明文字都抓不到時的近似年週（NIDSS 週編號與 ISO 略有出入，
+    僅作為上限，避免誤取圖表尾端以 0 填滿的未來週次）。"""
+    year, week, _ = date.today().isocalendar()
+    return year, week
+
+
+def _counts(vals: dict) -> dict:
+    """只留計數 series（排除陽性率與流行閾值）。"""
+    return {k: v for k, v in vals.items()
+            if not _is_pct(k) and not _is_threshold(k)}
+
+
+def _unfilled(chart: Chart, index: int, vals: dict) -> bool:
+    """判斷該週是否為「尚未填報」——NIDSS 的近兩年圖以 0（非 null）填滿
+    尚未發生或尚未回報的週次，若該指標近期本來就有量，0 即代表未更新。"""
+    counts = _counts(vals)
+    if not counts or any(counts.values()):
+        return False
+    for j in range(max(0, index - ZERO_LOOKBACK), index):
+        earlier = chart.week_values(chart.weeks[j])
+        if earlier and any(_counts(earlier).values()):
+            return True
+    return False
+
+
 def _last_with_values(chart: Chart, target: str):
     """找 target 當週或之前最近有資料的一週，回傳 (週標籤, 當週值, 前一週值)。"""
     for i in range(len(chart.weeks) - 1, -1, -1):
@@ -67,7 +96,7 @@ def _last_with_values(chart: Chart, target: str):
         if label > target:
             continue
         vals = chart.week_values(label)
-        if vals:
+        if vals and not _unfilled(chart, i, vals):
             prev = chart.week_values(chart.weeks[i - 1]) if i > 0 else None
             return label, vals, prev
     return None, None, None
@@ -122,27 +151,54 @@ def _render_chart(item: dict, chart: Chart, chart_ctx: dict) -> str | None:
     return f"![{item.get('name', '')} 趨勢圖]({chart_ctx['prefix']}/{filename})"
 
 
-def _merged_chart(item: dict) -> Chart:
+def _source_chart(item: dict, url: str, form: dict | None) -> Chart:
+    page = fetch_page(url, form=form)
+    chart = find_chart(page.charts, item.get("title_contains"))
+    if chart is None:
+        titles = "、".join((c.title or "（無標題）") for c in page.charts[:6])
+        raise ValueError(f"找不到對應圖表；頁面現有圖表：{titles}")
+    return chart
+
+
+def _merged_chart(item: dict) -> tuple[Chart, str | None]:
     """依 item['sources'] 抓多個查詢（如本土/境外的表單查詢），合併為一張圖。
 
     每個 source 取一條符合 series_keyword 的 series，改以 source 的
-    label 命名，組成同一張多 series 的 Chart。
+    label 命名，組成同一張多 series 的 Chart。個別分項查詢失敗時略過該項；
+    全部失敗才退回不帶篩選的整體查詢（合計數列），並回傳說明字串。
     """
     keyword = item.get("series_keyword")
+
+    def pick(chart: Chart) -> str:
+        names = [n for n in chart.series if keyword and keyword in n]
+        return (names or list(chart.series))[0]
+
     merged: dict[str, list] = {}
     weeks: list[str] | None = None
     suffix = ""
+    failed: list[str] = []
     for src in item["sources"]:
-        page = fetch_page(src["url"], form=src.get("form"))
-        chart = find_chart(page.charts, item.get("title_contains"))
-        if chart is None:
-            raise ValueError(f"「{src.get('label', '?')}」查詢找不到對應圖表")
-        names = [n for n in chart.series if keyword and keyword in n] or list(chart.series)
+        label = src.get("label", "?")
+        try:
+            chart = _source_chart(item, src["url"], src.get("form"))
+        except Exception as exc:
+            failed.append(f"{label}查詢失敗（{type(exc).__name__}）")
+            continue
         if weeks is None:
             weeks, suffix = chart.weeks, chart.suffix
-        merged[src.get("label", names[0])] = chart.series[names[0]]
-    return Chart(title=item.get("name", ""), weeks=weeks or [],
-                 suffix=suffix, series=merged)
+        merged[label] = chart.series[pick(chart)]
+
+    if merged:
+        note = f"（{'、'.join(failed)}，未計入）" if failed else None
+        return Chart(title=item.get("name", ""), weeks=weeks or [],
+                     suffix=suffix, series=merged), note
+
+    # 分項查詢全數失敗：退回不帶篩選的整體查詢，至少保住合計數字
+    chart = _source_chart(item, item["sources"][0]["url"], None)
+    name = pick(chart)
+    return Chart(title=item.get("name", ""), weeks=chart.weeks,
+                 suffix=chart.suffix, series={"合計": chart.series[name]}), \
+        "（分項查詢失敗，此處為本土＋境外合計）"
 
 
 def _render_years_item(item: dict, chart: Chart, anchor: tuple[int, int] | None,
@@ -167,7 +223,10 @@ def _render_years_item(item: dict, chart: Chart, anchor: tuple[int, int] | None,
                 idx = chart.weeks.index(fmt)
                 break
     if idx is None or idx >= len(data) or data[idx] is None:
-        idx = max((j for j, v in enumerate(data) if v is not None), default=None)
+        # 先找最後一個非零值（尾端的 0 多為尚未填報的週）；整條皆 0 才退回非 None
+        idx = next((j for j in range(len(data) - 1, -1, -1) if data[j]), None)
+        if idx is None:
+            idx = max((j for j, v in enumerate(data) if v is not None), default=None)
     if idx is None:
         return [f"- **{name}**：無可用資料"]
 
@@ -197,9 +256,10 @@ def _render_years_item(item: dict, chart: Chart, anchor: tuple[int, int] | None,
 def _render_item(item: dict, anchor: tuple[int, int] | None,
                  chart_ctx: dict | None = None) -> list[str]:
     name = item.get("name", "?")
+    note = None
     try:
         if item.get("sources"):
-            chart = _merged_chart(item)
+            chart, note = _merged_chart(item)
         else:
             page = fetch_page(item["url"])
             chart = find_chart(page.charts, item.get("title_contains"))
@@ -207,7 +267,9 @@ def _render_item(item: dict, anchor: tuple[int, int] | None,
                 titles = "、".join((c.title or "（無標題）") for c in page.charts[:8])
                 return [f"- **{name}**：⚠ 找不到對應圖表；頁面現有圖表：{titles}"]
     except Exception as exc:
-        return [f"- **{name}**：頁面抓取失敗（{type(exc).__name__}）"]
+        detail = str(exc).strip().replace("\n", " ")[:120]
+        reason = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+        return [f"- **{name}**：頁面抓取失敗（{reason}）"]
 
     if item.get("chart_type") == "years":
         return _render_years_item(item, chart, anchor, chart_ctx)
@@ -248,7 +310,7 @@ def _render_item(item: dict, anchor: tuple[int, int] | None,
 
     if is_rate:
         body = "、".join(f"{k} {_fmt(v)}{suffix}" for k, v in groups[:MAX_GROUPS])
-        lines.append(f"- **{name}**（{_pretty(label)}）：{body}")
+        lines.append(f"- **{name}**（{_pretty(label)}）：{body}{note or ''}")
     else:
         total = sum(counts.values())
         head = f"- **{name}**（{_pretty(label)}）：共 {_fmt(total)}{suffix}"
@@ -263,7 +325,7 @@ def _render_item(item: dict, anchor: tuple[int, int] | None,
             head += f"；陽性率 {_fmt(v)}%"
         for k, v in thresholds.items():
             head += f"（{k} {_fmt(v)}）"
-        lines.append(head)
+        lines.append(head + (note or ""))
         # 有趨勢圖時分項組成由圖表呈現（sources 分項已標在行內），不再列明細
         if len(groups) > 1 and not image_line and not item.get("sources"):
             shown = "、".join(f"{k} {_fmt(v)}" for k, v in groups[:MAX_GROUPS])
@@ -287,6 +349,7 @@ def build_monitor_sections(config: dict, charts_dir: Path | None = None,
     Markdown 以 assets_prefix 為相對路徑引用圖檔。
     """
     anchor = _anchor_week(config)
+    target_week = anchor or _today_week()
     chart_weeks = int(config.get("chart_weeks", 26))
     lines: list[str] = []
     for si, section in enumerate(config.get("nidss_monitor", []), 1):
@@ -296,7 +359,7 @@ def build_monitor_sections(config: dict, charts_dir: Path | None = None,
             if charts_dir is not None:
                 chart_ctx = {"dir": charts_dir, "prefix": assets_prefix,
                              "weeks": chart_weeks, "filename": f"{si}-{ii}.png"}
-            lines += _render_item(item, anchor, chart_ctx)
+            lines += _render_item(item, target_week, chart_ctx)
         lines.append("")
     if lines and anchor:
         lines.append(

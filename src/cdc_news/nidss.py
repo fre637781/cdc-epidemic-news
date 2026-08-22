@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from dataclasses import dataclass, field
 
 import requests
@@ -23,6 +24,8 @@ from bs4 import BeautifulSoup
 
 USER_AGENT = "cdc-epidemic-news/0.1 (+https://github.com)"
 REQUEST_TIMEOUT = 60
+MAX_ATTEMPTS = 3          # NIDSS 偶發連線失敗或回維護頁，重試數次再放棄
+RETRY_WAIT = 3            # 秒（第 n 次重試等 RETRY_WAIT * n）
 
 _PUSH_MARKER = "hcJson.push("
 
@@ -70,12 +73,9 @@ def fetch_page(url: str, form: dict | None = None) -> Page:
     if key in _page_cache:
         return _page_cache[key]
     if form:
-        text = _post_form(url, form)
+        text = _with_retry(lambda: _post_form(url, form))
     else:
-        resp = requests.get(url, headers={"User-Agent": USER_AGENT},
-                            timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        text = resp.content.decode("utf-8-sig", errors="replace")
+        text = _with_retry(lambda: _get(url))
     charts, errors = parse_charts(text)
     page = Page(
         url=url,
@@ -86,6 +86,24 @@ def fetch_page(url: str, form: dict | None = None) -> Page:
     )
     _page_cache[key] = page
     return page
+
+
+def _with_retry(fetch):
+    """重試抓取：連線失敗或頁面內容不如預期（如回維護頁）時再試。"""
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            return fetch()
+        except Exception:
+            if attempt == MAX_ATTEMPTS:
+                raise
+            time.sleep(RETRY_WAIT * attempt)
+
+
+def _get(url: str) -> str:
+    resp = requests.get(url, headers={"User-Agent": USER_AGENT},
+                        timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
+    return resp.content.decode("utf-8-sig", errors="replace")
 
 
 def _post_form(url: str, overrides: dict) -> str:
