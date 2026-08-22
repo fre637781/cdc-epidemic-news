@@ -41,6 +41,7 @@ nidss_monitor:
     items:
       - name: 新冠併發重症
         series_keyword: 確定
+        report_lag: 1              # 重症通報有延遲，取再前一週的較穩定數字
         sources:
           - label: 本土
             url: "https://nidss.cdc.gov.tw/nndss/Disease?id=19SC"
@@ -62,6 +63,7 @@ nidss_monitor:
     items:
       - name: 流感併發重症
         series_keyword: 確定
+        report_lag: 1              # 重症通報有延遲，取再前一週的較穩定數字
         sources:
           - label: 本土
             url: "https://nidss.cdc.gov.tw/nndss/Disease?id=487a"
@@ -82,6 +84,7 @@ nidss_monitor:
     items:
       - name: 腸病毒感染併發重症
         series_keyword: 確定
+        report_lag: 1              # 重症通報有延遲，取再前一週的較穩定數字
         sources:
           - label: 本土
             url: "https://nidss.cdc.gov.tw/nndss/Disease?id=0749"
